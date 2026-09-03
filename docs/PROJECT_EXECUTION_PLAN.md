@@ -109,7 +109,7 @@ Delivered:
 - GitHub Actions CI
 - Basic backend/frontend tests
 
-### Phase 2 — Authentication — CURRENT
+### Phase 2 — Authentication — COMPLETE
 
 Branch: `feature/authentication`
 
@@ -142,7 +142,9 @@ Definition of done:
 - Frontend build/tests remain green.
 - GitHub Actions push and PR checks pass.
 
-### Phase 3 — Market Data
+### Phase 3 — Market Data — CURRENT
+
+Branch: `feature/market-data`
 
 Implement:
 - Public market provider/exchange integration
@@ -344,8 +346,8 @@ Automated tests must not depend on real exchange funds or unstable third-party A
 ## 9. Feature sequence — do not reorder without approval
 
 1. Foundation — complete
-2. Authentication — current
-3. Market data
+2. Authentication — complete
+3. Market data — current
 4. AI/ML prediction
 5. Portfolio and risk
 6. Exchange integration

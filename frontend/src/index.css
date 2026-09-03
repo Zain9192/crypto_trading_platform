@@ -6,92 +6,146 @@
   text-rendering: optimizeLegibility;
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; background: #08111f; }
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
 
-body {
-  margin: 0;
-  min-width: 320px;
+.app-shell {
   min-height: 100vh;
+  padding: 28px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(58, 187, 253, 0.14), transparent 32%),
+    linear-gradient(180deg, #08111f 0%, #07101d 100%);
 }
 
-button,
-input,
-select,
-textarea {
-  font: inherit;
-}
-
-.page-shell {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 32px;
-  background: radial-gradient(circle at top, #132946, #08111f 55%);
-}
-
-.hero-card {
-  width: min(900px, 100%);
-  padding: 48px;
-  border: 1px solid #233a59;
-  border-radius: 24px;
-  background: rgba(13, 32, 59, 0.86);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.25);
+.app-header {
+  max-width: 1440px;
+  margin: 0 auto 22px;
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: flex-start;
 }
 
 .eyebrow {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   color: #3abbfd;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
-h1 {
-  margin: 0;
-  font-size: clamp(2rem, 5vw, 4rem);
-  line-height: 1.05;
-}
-
-.subtitle {
-  max-width: 680px;
-  margin: 20px 0 32px;
-  color: #aebdd0;
-  font-size: 1.05rem;
-  line-height: 1.7;
-}
-
-.module-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 12px;
-}
-
-.module-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 16px;
-  border: 1px solid #294362;
-  border-radius: 12px;
+h1, h2, p { margin-top: 0; }
+h1 { margin-bottom: 10px; font-size: clamp(2rem, 4vw, 3.4rem); line-height: 1.05; }
+h2 { margin-bottom: 0; font-size: 1.25rem; }
+.subtitle { max-width: 760px; margin-bottom: 0; color: #9fb0c7; line-height: 1.6; }
+.education-badge, .live-pill {
+  border: 1px solid #284361;
   background: #0b1a30;
+  color: #b8c8db;
+  border-radius: 999px;
+  padding: 9px 13px;
+  font-size: 0.8rem;
+  white-space: nowrap;
 }
 
-.status-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #3abbfd;
+.market-layout {
+  max-width: 1440px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(420px, 0.9fr) minmax(520px, 1.35fr);
+  gap: 18px;
+  align-items: start;
 }
 
-@media (max-width: 600px) {
-  .page-shell {
-    padding: 16px;
-  }
+.market-panel {
+  border: 1px solid #203853;
+  border-radius: 18px;
+  background: rgba(13, 32, 59, 0.9);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
 
-  .hero-card {
-    padding: 28px 20px;
-  }
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  padding: 20px 22px;
+  border-bottom: 1px solid #203853;
+}
+
+.live-pill { display: inline-flex; align-items: center; gap: 8px; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: #35c98d; box-shadow: 0 0 0 5px rgba(53, 201, 141, 0.08); }
+.market-table-wrap { max-height: 690px; overflow: auto; }
+.market-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+.market-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 12px 14px;
+  text-align: right;
+  color: #7f93ac;
+  background: #0d203b;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.market-table th:nth-child(1), .market-table th:nth-child(2) { text-align: left; }
+.market-table td { padding: 13px 14px; border-top: 1px solid #172c47; text-align: right; color: #c8d4e3; }
+.market-table td:nth-child(1), .market-table td:nth-child(2) { text-align: left; }
+.market-table tbody tr { transition: background 120ms ease; }
+.market-table tbody tr:hover { background: #102843; cursor: pointer; }
+.market-table .selected-row { background: rgba(58, 187, 253, 0.09); }
+.asset-cell { display: flex; align-items: center; gap: 10px; }
+.asset-cell img { width: 28px; height: 28px; border-radius: 50%; }
+.asset-cell span { display: grid; gap: 2px; }
+.asset-cell small { color: #7f93ac; }
+.positive { color: #35c98d !important; }
+.negative { color: #f06868 !important; }
+.table-state { text-align: center !important; color: #8ea0b7 !important; padding: 28px !important; }
+
+.chart-panel { min-height: 690px; }
+.chart-heading { align-items: flex-start; }
+.price-line { margin: 7px 0 0; font-size: 1.6rem; font-weight: 750; }
+.interval-tabs { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
+.interval-tabs button {
+  border: 1px solid #294362;
+  background: #0b1a30;
+  color: #9fb0c7;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.interval-tabs button.active { border-color: #3abbfd; color: #e7f7ff; background: rgba(58, 187, 253, 0.12); }
+.chart-canvas { width: 100%; min-height: 390px; }
+.chart-placeholder { height: 390px; display: grid; place-items: center; color: #8195ad; background: #0b1a30; }
+.indicator-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  background: #203853;
+  border-top: 1px solid #203853;
+}
+.indicator-grid > div { background: #0d203b; padding: 15px 16px; display: grid; gap: 5px; }
+.indicator-grid span { color: #7f93ac; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.indicator-grid strong { font-size: 0.95rem; }
+.error-banner { margin: 14px 18px; padding: 10px 12px; border-radius: 9px; border: 1px solid rgba(240, 104, 104, 0.35); background: rgba(240, 104, 104, 0.08); color: #ffc4c4; }
+
+@media (max-width: 1080px) {
+  .market-layout { grid-template-columns: 1fr; }
+  .market-table-wrap { max-height: 520px; }
+}
+
+@media (max-width: 720px) {
+  .app-shell { padding: 16px; }
+  .app-header { flex-direction: column; }
+  .education-badge { white-space: normal; }
+  .section-heading, .chart-heading { align-items: stretch; flex-direction: column; }
+  .interval-tabs { justify-content: flex-start; }
+  .indicator-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .market-table { min-width: 760px; }
 }

@@ -20,6 +20,7 @@ class Settings(BaseSettings):
 
     redis_host: str = "localhost"
     redis_port: int = 6379
+    redis_db: int = 0
 
     jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"
@@ -30,6 +31,14 @@ class Settings(BaseSettings):
     login_lockout_minutes: int = 15
     auth_data_encryption_key: str = ""
     totp_issuer: str = "AI Crypto Trading Platform"
+
+    coingecko_base_url: str = "https://api.coingecko.com/api/v3"
+    binance_market_base_url: str = "https://api.binance.com"
+    market_default_quote_asset: str = "USDT"
+    market_refresh_seconds: int = 30
+    market_cache_ttl_seconds: int = 25
+    ohlcv_cache_ttl_seconds: int = 60
+    market_http_timeout_seconds: float = 10.0
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -43,6 +52,10 @@ class Settings(BaseSettings):
             f"postgresql://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
+
+    @property
+    def mongo_uri(self) -> str:
+        return f"mongodb://{self.mongo_host}:{self.mongo_port}"
 
     def validate_auth_secrets(self) -> None:
         if len(self.jwt_secret_key) < 32:
