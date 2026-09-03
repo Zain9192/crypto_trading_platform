@@ -1,0 +1,73 @@
+name: SonarQube
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  sonar:
+    name: SonarQube analysis
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+      SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
+      SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve Sonar configuration
+        id: sonar-config
+        shell: bash
+        run: |
+          if [[ -z "${SONAR_TOKEN}" ]]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Sonar analysis skipped: configure the SONAR_TOKEN repository secret."
+            exit 0
+          fi
+
+          if [[ -z "${SONAR_HOST_URL}" && -z "${SONAR_ORGANIZATION}" ]]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Sonar analysis skipped: configure SONAR_HOST_URL for SonarQube Server or SONAR_ORGANIZATION for SonarQube Cloud."
+            exit 0
+          fi
+
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          echo "project_key=-Dsonar.projectKey=${SONAR_PROJECT_KEY:-crypto_trading_platform}" >> "$GITHUB_OUTPUT"
+          if [[ -n "${SONAR_ORGANIZATION}" ]]; then
+            echo "organization=-Dsonar.organization=${SONAR_ORGANIZATION}" >> "$GITHUB_OUTPUT"
+          else
+            echo "organization=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: SonarQube scan
+        if: steps.sonar-config.outputs.enabled == 'true'
+        uses: SonarSource/sonarqube-scan-action@v8.2.1
+        with:
+          args: >
+            ${{ steps.sonar-config.outputs.project_key }}
+            ${{ steps.sonar-config.outputs.organization }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+
+      - name: SonarQube quality gate
+        if: steps.sonar-config.outputs.enabled == 'true'
+        uses: SonarSource/sonarqube-quality-gate-action@v1.2.1
+        with:
+          pollingTimeoutSec: 300
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
