@@ -9,7 +9,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/postgres/001_initial.sql:/docker-entrypoint-initdb.d/001_initial.sql:ro
+      - ./database/postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crypto_user} -d ${POSTGRES_DB:-crypto_trading}"]
       interval: 10s
@@ -51,6 +51,15 @@ services:
       MONGO_PORT: 27017
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_ACCESS_TOKEN_MINUTES: ${JWT_ACCESS_TOKEN_MINUTES:-1440}
+      JWT_REFRESH_TOKEN_MINUTES: ${JWT_REFRESH_TOKEN_MINUTES:-10080}
+      EMAIL_VERIFICATION_TOKEN_MINUTES: ${EMAIL_VERIFICATION_TOKEN_MINUTES:-1440}
+      LOGIN_MAX_FAILED_ATTEMPTS: ${LOGIN_MAX_FAILED_ATTEMPTS:-5}
+      LOGIN_LOCKOUT_MINUTES: ${LOGIN_LOCKOUT_MINUTES:-15}
+      AUTH_DATA_ENCRYPTION_KEY: ${AUTH_DATA_ENCRYPTION_KEY:?AUTH_DATA_ENCRYPTION_KEY is required}
+      TOTP_ISSUER: ${TOTP_ISSUER:-AI Crypto Trading Platform}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:

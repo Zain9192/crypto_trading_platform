@@ -15,6 +15,10 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      APP_ENV: test
+      JWT_SECRET_KEY: test-only-secret-key-that-is-at-least-32-characters-long
+      AUTH_DATA_ENCRYPTION_KEY: 65ujGo4u-rd5tR5SJEB0mvwCv4DZIuk6S7jgpQ8xOEc=
     steps:
       - name: Checkout
         uses: actions/checkout@v4
