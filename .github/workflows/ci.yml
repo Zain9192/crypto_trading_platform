@@ -56,3 +56,34 @@ jobs:
 
       - name: Build frontend
         run: npm run build
+
+  checkstyle:
+    name: Checkstyle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect Java sources
+        id: java
+        shell: bash
+        run: |
+          if find . -type f -name '*.java' \
+            -not -path './.git/*' \
+            -not -path './frontend/node_modules/*' \
+            -print -quit | grep -q .; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "No Java sources found. Checkstyle is configured and will activate automatically if Java code is added."
+          fi
+
+      - name: Set up Java
+        if: steps.java.outputs.present == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Run Checkstyle
+        run: ./scripts/run-checkstyle.sh
