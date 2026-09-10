@@ -1,7 +1,7 @@
 import pandas as pd
 
 
-def calculate_indicators(candles: list[dict]) -> dict:
+def calculate_indicators(candles: list[dict]) -> pd.DataFrame:
     df = pd.DataFrame(candles)
 
     close = df["close"]
@@ -21,11 +21,11 @@ def calculate_indicators(candles: list[dict]) -> dict:
 
     std = close.rolling(20).std()
 
-    return {
-        "sma": sma.iloc[-1],
-        "ema": ema.iloc[-1],
-        "rsi": rsi.iloc[-1],
-        "macd": macd.iloc[-1],
-        "bollinger_upper": (sma + (2 * std)).iloc[-1],
-        "bollinger_lower": (sma - (2 * std)).iloc[-1],
-    }
+    return pd.DataFrame({
+        "sma": sma,
+        "ema": ema,
+        "rsi": rsi,
+        "macd": macd,
+        "bollinger_upper": sma + (2 * std),
+        "bollinger_lower": sma - (2 * std),
+    })

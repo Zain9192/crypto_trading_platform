@@ -115,6 +115,14 @@ async def stream_prices(
                 await websocket.send_json(message.model_dump(mode="json"))
             except ProviderError as exc:
                 await websocket.send_json({"type": "error", "detail": str(exc)})
-            await asyncio.sleep(settings.market_refresh_seconds)
+            # Observe disconnects during the refresh interval without polling providers.
+            deadline = asyncio.get_running_loop().time() + settings.market_refresh_seconds
+            while (remaining := deadline - asyncio.get_running_loop().time()) > 0:
+                try:
+                    event = await asyncio.wait_for(websocket.receive(), timeout=remaining)
+                except asyncio.TimeoutError:
+                    break
+                if event["type"] == "websocket.disconnect":
+                    return
     except WebSocketDisconnect:
         return
