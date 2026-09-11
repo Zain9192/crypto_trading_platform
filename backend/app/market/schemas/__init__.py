@@ -83,3 +83,6 @@ class MarketStreamMessage(BaseModel):
     generated_at: datetime
     refresh_seconds: int = Field(ge=1)
     items: list[MarketAsset]
+
+# Compatibility exports for the auxiliary ingestion helpers.
+from .market import AssetSchema, IndicatorSchema, OHLCVSchema, PriceSchema

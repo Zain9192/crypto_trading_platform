@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 
 import type { MarketAsset } from '../api/market'
 
-interface MarketSnapshotMessage {
+export interface MarketSnapshotMessage {
   type: 'market_snapshot'
   generated_at: string
   refresh_seconds: number
@@ -16,7 +16,7 @@ function marketSocketUrl(): string {
   return `${protocol}//${window.location.host}/api/v1/market/ws/prices?limit=50`
 }
 
-export function useMarketSocket(onSnapshot: (items: MarketAsset[]) => void): void {
+export function useMarketSocket(onSnapshot: (message: MarketSnapshotMessage) => void): void {
   useEffect(() => {
     if (typeof WebSocket === 'undefined') return
 
@@ -29,8 +29,9 @@ export function useMarketSocket(onSnapshot: (items: MarketAsset[]) => void): voi
       socket.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data) as MarketSnapshotMessage
-          if (message.type === 'market_snapshot' && Array.isArray(message.items)) {
-            onSnapshot(message.items)
+          if (message.type === 'market_snapshot' && Array.isArray(message.items)
+            && Number.isFinite(message.refresh_seconds) && message.refresh_seconds >= 1) {
+            onSnapshot(message)
           }
         } catch {
           // Ignore malformed frames and keep the stream alive.

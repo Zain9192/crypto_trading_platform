@@ -6,6 +6,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 
+from pymongo.errors import PyMongoError
+
 from app.core.config import get_settings
 from app.market.dependencies import get_market_service
 from app.market.providers import ProviderError
@@ -74,6 +76,26 @@ def get_ohlcv(
     )
 
 
+@router.get("/history/{symbol}", response_model=OhlcvResponse)
+def get_history(
+    symbol: str,
+    service: Annotated[MarketService, Depends(get_market_service)],
+    interval: MarketInterval = Query(default="1d"),
+    limit: int = Query(default=200, ge=20, le=1000),
+) -> OhlcvResponse:
+    """Read persisted history without requiring a successful live provider request."""
+    try:
+        candles = service.get_history(symbol, interval, limit)
+    except PyMongoError as exc:
+        raise HTTPException(status_code=503, detail="Market history storage unavailable") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return OhlcvResponse(
+        symbol=symbol.upper().strip(), interval=interval, items=candles,
+        count=len(candles), cached=False, source="mongodb",
+    )
+
+
 @router.get("/indicators/{symbol}", response_model=IndicatorResponse)
 def get_indicators(
     symbol: str,
@@ -115,6 +137,14 @@ async def stream_prices(
                 await websocket.send_json(message.model_dump(mode="json"))
             except ProviderError as exc:
                 await websocket.send_json({"type": "error", "detail": str(exc)})
-            await asyncio.sleep(settings.market_refresh_seconds)
+            # Observe disconnects during the refresh interval without polling providers.
+            deadline = asyncio.get_running_loop().time() + settings.market_refresh_seconds
+            while (remaining := deadline - asyncio.get_running_loop().time()) > 0:
+                try:
+                    event = await asyncio.wait_for(websocket.receive(), timeout=remaining)
+                except asyncio.TimeoutError:
+                    break
+                if event["type"] == "websocket.disconnect":
+                    return
     except WebSocketDisconnect:
         return

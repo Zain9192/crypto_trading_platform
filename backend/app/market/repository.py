@@ -16,15 +16,22 @@ class MarketRepositoryProtocol(Protocol):
 class MongoMarketRepository:
     def __init__(self, database: Database) -> None:
         self.collection = database["market_data"]
+        self._indexes_ready = False
+
+    def ensure_indexes(self) -> None:
+        if self._indexes_ready:
+            return
         self.collection.create_index(
             [("symbol", ASCENDING), ("interval", ASCENDING), ("timestamp", DESCENDING)],
             unique=True,
             name="market_data_symbol_interval_timestamp",
         )
+        self._indexes_ready = True
 
     def upsert_ohlcv(self, candles: list[OhlcvCandle]) -> None:
         if not candles:
             return
+        self.ensure_indexes()
         operations = []
         for candle in candles:
             document = candle.model_dump(mode="python")

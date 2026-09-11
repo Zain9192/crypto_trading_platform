@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -35,7 +36,10 @@ class Settings(BaseSettings):
     coingecko_base_url: str = "https://api.coingecko.com/api/v3"
     binance_market_base_url: str = "https://api.binance.com"
     market_default_quote_asset: str = "USDT"
-    market_refresh_seconds: int = 30
+    market_refresh_seconds: int = Field(default=30, ge=1)
+    market_history_refresh_seconds: int = Field(default=900, ge=60)
+    market_history_candle_limit: int = Field(default=200, ge=20, le=1000)
+    market_ingestion_request_spacing_seconds: float = Field(default=0.25, ge=0.01)
     market_cache_ttl_seconds: int = 25
     ohlcv_cache_ttl_seconds: int = 60
     market_http_timeout_seconds: float = 10.0

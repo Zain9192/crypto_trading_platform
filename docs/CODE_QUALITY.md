@@ -1,29 +1,10 @@
 # Code Quality Tooling
 
-The repository uses automated tests plus SonarQube/SonarQube Cloud integration and Checkstyle support.
+The repository uses GitHub Actions backend/frontend tests and frontend production builds, plus Checkstyle support for any future Java code.
 
-## SonarQube / SonarQube Cloud
+## SonarQube — deferred
 
-Configuration is stored in `sonar-project.properties` and CI integration is in `.github/workflows/sonar.yml`.
-
-The workflow is safe before a Sonar project is connected: it reports a skipped analysis instead of failing when Sonar credentials are not configured.
-
-Configure these GitHub repository settings to activate analysis:
-
-- Secret `SONAR_TOKEN` — required.
-- Variable `SONAR_HOST_URL` — set this for SonarQube Server. It is not required for SonarQube Cloud.
-- Variable `SONAR_ORGANIZATION` — set this for SonarQube Cloud.
-- Variable `SONAR_PROJECT_KEY` — optional override. The default is `crypto_trading_platform`.
-
-Once configured, pushes and pull requests run the official SonarQube scan action followed by the Sonar quality-gate check. A failed configured quality gate fails the Sonar workflow.
-
-The scan currently covers:
-
-- `backend/app` — Python application code.
-- `frontend/src` — TypeScript/React application code.
-- `backend/tests` — backend tests.
-
-Generated/build/dependency directories are excluded.
+SonarQube was removed at the project owner's request on 2026-09-10. No scan workflow or Sonar project configuration is currently active. It can be added in a later feature branch. No repository secrets or account settings were changed.
 
 ## Checkstyle
 
@@ -48,4 +29,4 @@ If Java files exist, Java 21+ and `curl` are required. The script downloads the 
 
 ## Important distinction
 
-Do not treat Checkstyle as a Python or TypeScript linter. Sonar analyzes the project's current Python and TypeScript source directly. If dedicated language-specific lint gates are added later, use Python and TypeScript-native tooling rather than forcing Java Checkstyle rules onto those languages.
+Do not treat Checkstyle as a Python or TypeScript linter. If dedicated language-specific lint gates are added later, use Python and TypeScript-native tooling rather than forcing Java Checkstyle rules onto those languages.
