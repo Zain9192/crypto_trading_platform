@@ -17,7 +17,7 @@ Branch: `feature/ai-prediction`, based on main after Phase 3 PR #6 was merged.
 - [x] Backtest only held-out observations with a next-bar execution rule, fees and drawdown reporting.
 - [x] Add offline tests, including real small RF/XGBoost/LSTM training and artifact round-trip.
 - [x] Document training, activation, migration, model storage, limitations and deployment.
-- [ ] Pass GitHub Actions and open a feature PR; owner performs merge.
+- [x] Pass GitHub Actions and open a feature PR; PR #7 was merged by the owner.
 
 ## Scope decisions
 
@@ -26,3 +26,14 @@ One-step forecasts use fully closed candles of one symbol and interval. The thre
 ## Data and verification
 
 Initial training requires sufficient persisted history with continuous candles. Synthetic fixtures verify engineering behavior only; model usefulness must be assessed on real held-out market data. No production performance or profitability claim follows from passing CI.
+
+
+## Completion verification
+
+- Implementation merged in PR #7: https://github.com/Zain9192/crypto_trading_platform/pull/7
+- Main CI passed: https://github.com/Zain9192/crypto_trading_platform/actions/runs/34631838374
+- Backend CI: 59 tests passed, including disposable PostgreSQL migration/registry tests and real small RF/XGBoost/LSTM training.
+- Frontend: 4 tests and production build passed.
+- Follow-up setup fix: default historical ingestion increased from 200 to 500 candles so fresh deployments can build the required training dataset.
+- Follow-up compatibility fix: candle-boundary calculations use standard-library durations/calendar arithmetic, removing repeated NumPy timedelta deprecations.
+- Real-data model training/activation is a deployment task; no production model or market-performance claim is implied by CI.

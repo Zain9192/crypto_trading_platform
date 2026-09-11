@@ -46,3 +46,28 @@ def test_bad_history_is_rejected(candles, kind):
 def test_too_little_training_history_is_rejected(candles):
     with pytest.raises(DataError, match="200 supervised"):
         chronological_split(samples_from_frame(feature_frame(candles[:150])))
+
+
+def test_default_ingestion_window_supports_training(candles):
+    from app.core.config import Settings
+    configured_history = candles[:Settings().market_history_candle_limit]
+    train, validation, test = chronological_split(samples_from_frame(feature_frame(configured_history)))
+    assert len(train.X) > len(validation.X) > 0
+    assert len(test.X) > 0
+
+
+@pytest.mark.parametrize("timestamp, interval, expected", [
+    ("2024-02-01T00:00:00+00:00", "1M", "2024-03-01T00:00:00+00:00"),
+    ("2024-12-01T00:00:00+00:00", "1M", "2025-01-01T00:00:00+00:00"),
+    ("2024-02-28T00:00:00+00:00", "1d", "2024-02-29T00:00:00+00:00"),
+    ("2024-01-01T00:00:00+00:00", "1w", "2024-01-08T00:00:00+00:00"),
+    ("2024-01-01T00:00:00+00:00", "4h", "2024-01-01T04:00:00+00:00"),
+    ("2024-01-01T00:00:00+00:00", "1h", "2024-01-01T01:00:00+00:00"),
+])
+def test_candle_end_preserves_calendar_boundaries_without_deprecations(timestamp, interval, expected):
+    from datetime import datetime
+    import warnings
+    from app.prediction.data import candle_end
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        assert candle_end(datetime.fromisoformat(timestamp), interval).isoformat() == expected

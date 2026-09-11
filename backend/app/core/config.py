@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     market_default_quote_asset: str = "USDT"
     market_refresh_seconds: int = Field(default=30, ge=1)
     market_history_refresh_seconds: int = Field(default=900, ge=60)
-    market_history_candle_limit: int = Field(default=200, ge=20, le=1000)
+    market_history_candle_limit: int = Field(default=500, ge=20, le=1000)
     market_ingestion_request_spacing_seconds: float = Field(default=0.25, ge=0.01)
     market_cache_ttl_seconds: int = 25
     ohlcv_cache_ttl_seconds: int = 60
