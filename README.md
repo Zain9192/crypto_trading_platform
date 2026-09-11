@@ -540,3 +540,62 @@ This endpoint returns `source: mongodb`, an empty list if no history has been st
 Indicators use TA-Lib, as specified in the plan. Warm-up values are null until enough candles exist. The candlestick chart includes volume bars and preserves zoom/pan during automatic refresh.
 
 SonarQube is deferred at the owner's request; its workflow and project configuration have been removed. Backend tests, frontend tests/build, and the existing Checkstyle job remain in CI.
+
+
+## Phase 4 — AI/ML prediction
+
+The step-by-step implementation checklist is in [docs/PHASE_4_CHECKLIST.md](docs/PHASE_4_CHECKLIST.md). Training is an offline operator task; authenticated API calls only perform inference and record forecasts.
+
+### 1. Prepare the database and history
+
+For an existing PostgreSQL volume, apply the additive migration (fresh Compose volumes run it automatically):
+
+```bash
+docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < database/postgres/003_prediction.sql
+```
+
+Set `MARKET_HISTORY_CANDLE_LIMIT=500` (up to 1000) in `.env` and restart ingestion. The Phase 3 default of 200 candles is deliberately rejected as insufficient for model training. The worker needs at least 200 supervised samples after indicator warm-up and sequence construction; 300 or more stored continuous candles are required in practice. Unsupported pairs, zero-volume windows, missing/duplicate candles and unclosed candles are not silently fabricated or filled.
+
+```bash
+docker compose up -d --build backend market-ingestion
+```
+
+### 2. Train a candidate version
+
+```bash
+docker compose --profile training run --rm prediction-trainer --symbol BTC --interval 1d --limit 1000 --lookback 20 --epochs 10 --trees 100
+```
+
+For a local Python setup, install `backend/requirements.txt`, set `PREDICTION_ARTIFACT_DIR` to a trusted directory shared by the training process and API, then run from `backend`:
+
+```bash
+python -m app.prediction.train --symbol BTC --interval 1d --limit 1000
+```
+
+Training outputs a version identifier, validation/test metrics and held-out backtest results. It creates an inactive candidate by default. Review the metrics against the included no-change price baseline before activation. RF confidence is uncalibrated; passing training or CI does not establish market performance. Only closed candles are used; the forecast horizon is one candle of the selected interval.
+
+### 3. Activate or roll back a version explicitly
+
+```bash
+docker compose --profile training run --rm prediction-trainer --activate-version YOUR_VERSION_UUID
+```
+
+The command verifies the bundle before atomically changing the active version for that symbol/interval. The same command can select an older retained version to roll back. `--activate` on a training command is an explicit alternative that activates the newly evaluated bundle immediately. Models are operator-created; never replace artifact files with untrusted serialized models. Back up the PostgreSQL registry and artifact volume together. Runtime package versions must match the stored manifest; use a matching image or retrain after upgrades.
+
+### 4. Query predictions and opportunities
+
+Use an access token from the existing authentication flow:
+
+```bash
+curl -H "Authorization: Bearer $ACCESS_TOKEN" "http://localhost:8000/api/v1/predictions/BTC?interval=1d"
+curl -H "Authorization: Bearer $ACCESS_TOKEN" "http://localhost:8000/api/v1/predictions/models/BTC?interval=1d"
+curl -X POST -H "Authorization: Bearer $ACCESS_TOKEN" -H "Content-Type: application/json"   -d '{"symbols":["BTC","ETH"],"interval":"1d"}' "http://localhost:8000/api/v1/predictions/opportunities"
+```
+
+Forecasts include model version, data close time (`as_of`), forecast target close time, current/predicted price, RF direction/up probability, confidence, expected return, recent candle volatility, and validation absolute-error percentile. Expected returns and risk values are fractions (`0.01` means 1%). The classifier's direction and the regressors' forecast may disagree; they are separate estimates. Inactive/missing models or stale history return HTTP 503; invalid history returns HTTP 422. Ranking reports unavailable assets explicitly, compares one interval at a time, and places no orders.
+
+### 5. Evaluate and verify
+
+Evaluation uses ordered 70%/15%/15% partitions with one purged label sample at each boundary. Scaling and all model fitting use only train data. Validation residuals supply the error estimate, while regression MAE/RMSE, directional accuracy/precision/recall/F1, the persistence baseline and delayed long/cash backtest are reported separately on held-out test data. Fees default to 10 basis points per transition; the backtest is a simplified educational simulator without spread, liquidity, slippage or an exchange order book.
+
+Run tests from `backend` with `python -m pytest -q`. The model test trains all three algorithms on synthetic candles and verifies save/load and inference. PostgreSQL tests use only `PREDICTION_TEST_DSN` when supplied; CI provisions a disposable database. Local runs without that service explicitly skip the registry integration test. No trained production model, real-data performance result or live trading capability is shipped in this phase.

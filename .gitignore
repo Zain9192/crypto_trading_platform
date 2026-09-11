@@ -37,3 +37,7 @@ logs/
 models/
 data/raw/
 data/processed/
+
+# Versioned prediction bundles (stored outside Git)
+model_artifacts/
+*.joblib

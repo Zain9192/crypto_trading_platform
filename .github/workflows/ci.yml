@@ -12,10 +12,26 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: prediction_test
+          POSTGRES_PASSWORD: prediction_test
+          POSTGRES_DB: prediction_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U prediction_test -d prediction_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     defaults:
       run:
         working-directory: backend
     env:
+      PREDICTION_TEST_DSN: postgresql://prediction_test:prediction_test@localhost:5432/prediction_test
+      TF_NUM_INTRAOP_THREADS: 1
+      TF_NUM_INTEROP_THREADS: 1
+      OMP_NUM_THREADS: 1
       APP_ENV: test
       JWT_SECRET_KEY: test-only-secret-key-that-is-at-least-32-characters-long
       AUTH_DATA_ENCRYPTION_KEY: 65ujGo4u-rd5tR5SJEB0mvwCv4DZIuk6S7jgpQ8xOEc=

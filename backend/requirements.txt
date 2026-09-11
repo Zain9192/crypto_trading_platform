@@ -14,3 +14,7 @@ pandas>=2.3,<3
 pytest>=8,<10
 numpy>=2,<3
 TA-Lib>=0.6.5,<0.7
+scikit-learn>=1.6,<2
+xgboost>=3,<4
+tensorflow-cpu>=2.20,<2.21
+joblib>=1.4,<2
