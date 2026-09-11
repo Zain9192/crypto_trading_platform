@@ -16,7 +16,7 @@ flowchart TD
 
 - CoinGecko supplies the top-50 market-cap asset list. Binance supplies normalized OHLCV for supported pairs across `1h`, `4h`, `1d`, `1w`, and `1M`.
 - `python -m app.market.workers.ingestion` runs independent price and history loops. Docker Compose starts it as `market-ingestion`.
-- Price snapshots refresh every `MARKET_REFRESH_SECONDS` (default 30). Historical ingestion fetches up to `MARKET_HISTORY_CANDLE_LIMIT` (default 200) candles for each asset and interval, then repeats after `MARKET_HISTORY_REFRESH_SECONDS` (default 900).
+- Price snapshots refresh every `MARKET_REFRESH_SECONDS` (default 30). Historical ingestion fetches up to `MARKET_HISTORY_CANDLE_LIMIT` (default 500) candles for each asset and interval, then repeats after `MARKET_HISTORY_REFRESH_SECONDS` (default 900).
 - Historical writes use an upsert keyed by symbol, interval, and timestamp. An unsupported pair or failed write is logged and retried in the next cycle. A configurable pause between history requests limits request pressure. Shutdown stops new requests and waits for the current bounded provider call.
 - Redis caches snapshots, individual latest prices, and candle windows. MongoDB stores durable history; `/api/v1/market/history/{symbol}` reads it without fetching live prices. A history response is explicitly marked `source: mongodb` and may contain older data.
 - The REST and WebSocket endpoints share the same market service. The WebSocket sends complete snapshots on the configured cadence and observes disconnects between refreshes. The frontend retains REST polling for recovery.

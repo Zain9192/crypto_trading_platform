@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from calendar import monthrange
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
@@ -19,9 +20,14 @@ class DataError(ValueError):
 
 
 def candle_end(timestamp: datetime, interval: MarketInterval) -> datetime:
-    offset = {"1h": pd.Timedelta(hours=1), "4h": pd.Timedelta(hours=4),
-              "1d": pd.Timedelta(days=1), "1w": pd.Timedelta(weeks=1), "1M": pd.DateOffset(months=1)}[interval]
-    return (pd.Timestamp(timestamp) + offset).to_pydatetime()
+    if interval == "1M":
+        year = timestamp.year + (timestamp.month == 12)
+        month = timestamp.month % 12 + 1
+        return timestamp.replace(year=year, month=month,
+                                 day=min(timestamp.day, monthrange(year, month)[1]))
+    seconds = {"1h": 3600, "4h": 14400, "1d": 86400, "1w": 604800}[interval]
+    return timestamp + timedelta(seconds=seconds)
+
 
 
 def feature_frame(candles: list[OhlcvCandle], now: datetime | None = None) -> pd.DataFrame:

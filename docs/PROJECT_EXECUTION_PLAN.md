@@ -171,11 +171,13 @@ Gap review (2026-09-10):
 - CI evidence: https://github.com/Zain9192/crypto_trading_platform/actions/runs/34629130475
 - Phase 4 proceeds on `feature/ai-prediction` after this merge.
 
-### Phase 4 — AI/ML Prediction — CURRENT
+### Phase 4 — AI/ML Prediction — COMPLETE; MERGED
 
 Branch: `feature/ai-prediction`. Step-by-step progress: [Phase 4 checklist](PHASE_4_CHECKLIST.md).
 
-Implemented; final CI validation pending:
+Implemented and merged through PR #7; main CI passed (59 backend tests and frontend tests/build).
+
+Delivered:
 
 - Training dataset pipeline
 - Chronological train/validation/test splitting; never random-split time series
@@ -363,7 +365,7 @@ Automated tests must not depend on real exchange funds or unstable third-party A
 1. Foundation — complete
 2. Authentication — complete
 3. Market data — complete
-4. AI/ML prediction — current
+4. AI/ML prediction — complete
 5. Portfolio and risk
 6. Exchange integration
 7. Automated trading engine

@@ -524,7 +524,7 @@ The worker refreshes the top-50 price cache separately from historical ingestion
 | --- | --- | --- |
 | `MARKET_REFRESH_SECONDS` | 30 | Price refresh and frontend polling cadence in seconds |
 | `MARKET_HISTORY_REFRESH_SECONDS` | 900 | Delay between completed history cycles |
-| `MARKET_HISTORY_CANDLE_LIMIT` | 200 | Candles per asset/interval, from 20 to 1000 |
+| `MARKET_HISTORY_CANDLE_LIMIT` | 500 | Candles per asset/interval, from 20 to 1000 |
 | `MARKET_INGESTION_REQUEST_SPACING_SECONDS` | 0.25 | Pause between history requests |
 
 A full history cycle can take several minutes and does not block the price loop. Adjust cadence and pacing for the provider's quota. Candle responses may remain cached for `OHLCV_CACHE_TTL_SECONDS` even when the frontend polls more frequently.
@@ -554,7 +554,7 @@ For an existing PostgreSQL volume, apply the additive migration (fresh Compose v
 docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < database/postgres/003_prediction.sql
 ```
 
-Set `MARKET_HISTORY_CANDLE_LIMIT=500` (up to 1000) in `.env` and restart ingestion. The Phase 3 default of 200 candles is deliberately rejected as insufficient for model training. The worker needs at least 200 supervised samples after indicator warm-up and sequence construction; 300 or more stored continuous candles are required in practice. Unsupported pairs, zero-volume windows, missing/duplicate candles and unclosed candles are not silently fabricated or filled.
+Fresh setups default to `MARKET_HISTORY_CANDLE_LIMIT=500` (up to 1000), sufficient for the default training lookback once ingestion completes. Existing installations with `MARKET_HISTORY_CANDLE_LIMIT=200` in `.env` must update it to 500 and restart ingestion; an explicit environment setting overrides the new default. The worker needs at least 200 supervised samples after indicator warm-up and sequence construction; 300 or more stored continuous candles are required in practice. Unsupported pairs, zero-volume windows, missing/duplicate candles and unclosed candles are not silently fabricated or filled.
 
 ```bash
 docker compose up -d --build backend market-ingestion
