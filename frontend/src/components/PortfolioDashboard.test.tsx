@@ -93,3 +93,31 @@ it('signs in without storing tokens and clears the portfolio on sign out', async
   await screen.findByRole('button', { name: 'Sign in' })
   expect(screen.queryByRole('heading', { name: 'Portfolio overview' })).not.toBeInTheDocument()
 })
+
+it('keeps the session when risk validation rejects a request after token refresh', async () => {
+  let refreshed = false
+  const fetchMock = vi.fn(async (url: string, options?: RequestInit) => {
+    let status = 200
+    let payload: unknown = {}
+    if (url.endsWith('/login')) payload = { access_token: 'expired-access', refresh_token: 'old-refresh', expires_in: 900 }
+    else if (url.endsWith('/refresh')) { refreshed = true; payload = { access_token: 'renewed-access', refresh_token: 'new-refresh', expires_in: 900 } }
+    else if (url.endsWith('/portfolios')) payload = [{ portfolio_id: 1 }]
+    else if (url.includes('/trades')) payload = { items: [], next_cursor: null }
+    else if (url.endsWith('/orders')) {
+      status = refreshed ? 422 : 401
+      payload = { detail: refreshed ? 'Investment including fee is outside configured limits' : 'Expired token' }
+      if (refreshed) expect((options?.headers as Record<string, string>).Authorization).toBe('Bearer renewed-access')
+    } else payload = snapshot
+    return { ok: status === 200, status, json: async () => payload }
+  })
+  vi.stubGlobal('fetch', fetchMock)
+  mount(<PortfolioAccess />)
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'user@example.com' } })
+  fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'example-password' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+  await screen.findByRole('heading', { name: 'New paper trade' })
+  fields(); fireEvent.click(screen.getByRole('button', { name: 'Reserve paper trade' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Investment including fee is outside configured limits')
+  expect(screen.getByRole('heading', { name: 'Portfolio overview' })).toBeInTheDocument()
+  expect(fetchMock.mock.calls.filter(call => call[0].endsWith('/refresh'))).toHaveLength(1)
+})

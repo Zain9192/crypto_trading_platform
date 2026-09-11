@@ -193,7 +193,7 @@ Delivered:
 - Opportunity ranking engine
 - Backtesting/evaluation utilities
 
-### Phase 5 — Portfolio and Risk — IMPLEMENTED; VALIDATION IN PROGRESS
+### Phase 5 — Portfolio and Risk — IMPLEMENTED; REVIEW PENDING
 
 Branch: `feature/portfolio-risk`. Step-by-step progress: [Phase 5 checklist](PHASE_5_CHECKLIST.md).
 

@@ -29,11 +29,12 @@ export default function PortfolioAccess() {
           if (!session.current) throw new Error('Signed out')
           session.current = renewed
         }
-        return await api<T>(path, session.current?.access_token, method, body)
       } catch (refreshError) {
         session.current = null; setSignedIn(false); setError('Session expired. Please sign in again.')
         throw refreshError
       } finally { refreshing.current = null }
+      // A business rejection after a successful refresh must not destroy the session.
+      return api<T>(path, session.current?.access_token, method, body)
     }
   }
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -61,6 +62,7 @@ export default function PortfolioAccess() {
   async function logout() {
     setBusy(true); setError('')
     try {
+      if (refreshing.current) session.current = await refreshing.current
       if (session.current) await api('/auth/logout', undefined, 'POST', { refresh_token: session.current.refresh_token })
       session.current = null; setSignedIn(false)
     } catch { setError('Sign-out could not be confirmed. Please retry.'); }
