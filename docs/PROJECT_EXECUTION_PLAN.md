@@ -193,9 +193,13 @@ Delivered:
 - Opportunity ranking engine
 - Backtesting/evaluation utilities
 
-### Phase 5 — Portfolio and Risk
+### Phase 5 — Portfolio and Risk — COMPLETE; OWNER MERGE PENDING
 
-Implement:
+Branch: `feature/portfolio-risk`. Step-by-step progress: [Phase 5 checklist](PHASE_5_CHECKLIST.md).
+
+PR #9 is ready for owner review. CI passed with 85 backend tests, 10 frontend tests and the production build. Portfolio accounting and UI use virtual USD paper trades; exchange connectivity and automatic execution remain in Phases 6–7.
+
+Delivered:
 - Portfolio model/service
 - Holdings
 - Asset allocation
@@ -366,7 +370,7 @@ Automated tests must not depend on real exchange funds or unstable third-party A
 2. Authentication — complete
 3. Market data — complete
 4. AI/ML prediction — complete
-5. Portfolio and risk
+5. Portfolio and risk — complete; PR #9 owner merge pending
 6. Exchange integration
 7. Automated trading engine
 8. Alerts, notifications, reports

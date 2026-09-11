@@ -149,3 +149,27 @@ h2 { margin-bottom: 0; font-size: 1.25rem; }
   .indicator-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .market-table { min-width: 760px; }
 }
+
+.app-tabs { max-width: 1440px; margin: 0 auto 22px; display: flex; gap: 10px; }
+.app-tabs button, .portfolio-shell button { border: 1px solid #365575; border-radius: 8px; background: #112942; color: #dceafa; padding: 10px 14px; }
+.app-tabs button[aria-pressed="true"], .portfolio-shell .primary-button { background: #167ab1; border-color: #3abbfd; color: white; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #63cbff; outline-offset: 3px; }
+.portfolio-shell { max-width: 1440px; margin: 0 auto; display: grid; gap: 20px; }
+.auth-panel { max-width: 580px; margin: 0 auto; padding: 28px; }
+.portfolio-toolbar { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.portfolio-card { padding: 22px; }
+.portfolio-card p, .muted { color: #a8bad0; line-height: 1.55; }
+.portfolio-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.portfolio-metrics span { display: block; color: #a8bad0; font-size: .85rem; }
+.portfolio-metrics strong { display: block; margin-top: 10px; font-size: 1.65rem; overflow-wrap: anywhere; }
+.portfolio-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.portfolio-form, .portfolio-form fieldset { display: grid; gap: 14px; }
+.portfolio-form fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.portfolio-form label { display: grid; gap: 7px; color: #c2d1e2; font-size: .9rem; }
+.portfolio-form input, .portfolio-form select { width: 100%; min-width: 0; color: #e7edf7; border: 1px solid #365575; border-radius: 7px; padding: 10px; background: #08182c; }
+.success-banner { border: 1px solid #2b8065; background: #102e28; color: #a8eed4; padding: 14px; border-radius: 9px; }
+.portfolio-shell h3 { margin: 0 0 12px; }
+.portfolio-shell .section-heading h3 { margin: 0; }
+@media (max-width: 800px) { .portfolio-columns { grid-template-columns: 1fr; } .portfolio-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 440px) { .portfolio-metrics { grid-template-columns: 1fr; } }
