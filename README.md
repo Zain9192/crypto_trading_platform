@@ -599,3 +599,56 @@ Forecasts include model version, data close time (`as_of`), forecast target clos
 Evaluation uses ordered 70%/15%/15% partitions with one purged label sample at each boundary. Scaling and all model fitting use only train data. Validation residuals supply the error estimate, while regression MAE/RMSE, directional accuracy/precision/recall/F1, the persistence baseline and delayed long/cash backtest are reported separately on held-out test data. Fees default to 10 basis points per transition; the backtest is a simplified educational simulator without spread, liquidity, slippage or an exchange order book.
 
 Run tests from `backend` with `python -m pytest -q`. The model test trains all three algorithms on synthetic candles and verifies save/load and inference. PostgreSQL tests use only `PREDICTION_TEST_DSN` when supplied; CI provisions a disposable database. Local runs without that service explicitly skip the registry integration test. No trained production model, real-data performance result or live trading capability is shipped in this phase.
+
+## Phase 5 — Portfolio and risk
+
+The **Portfolio & risk** tab now provides sign-in/registration/verification, a virtual USD portfolio, holdings and allocation, cash reservations, average-cost P&L, risk settings, and paginated paper-trade history. Sessions stay in memory and refresh automatically; reloading the page requires signing in again.
+
+For existing PostgreSQL volumes, apply the additive migration before starting the updated backend (fresh Compose volumes apply SQL files automatically):
+
+```bash
+docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < database/postgres/004_portfolio.sql
+docker compose up -d --build
+```
+
+Keep existing volumes; do not use `down -v` to upgrade. If upgrading from before Phase 2, apply `002_auth.sql` and `003_prediction.sql` first. The Phase 5 migration is rerunnable and leaves foundation portfolio records in `legacy` mode.
+
+### Frontend walkthrough
+
+1. Open the frontend at `http://localhost:5173` for Vite development, or `http://localhost:5173` for Compose (or your configured `FRONTEND_PORT`). Choose **Portfolio & risk**.
+2. Sign in with a verified account (enter a 2FA code if enabled). For a new development account, choose **Create account**, register, confirm the supplied development verification token, then sign in. Production email delivery remains a later phase; the backend does not return development tokens in production.
+3. Create a paper portfolio with **1,000 virtual USD**. Creation is idempotent: a repeat returns your existing portfolio and never adds more cash.
+4. Reserve a **BTC buy**, quantity **2**, simulation price **100 USD**, fee **2 USD**. Available cash becomes **798**, reserved cash **202**. The default recorded stop/target are **95 / 110 USD**.
+5. Choose **Fill paper trade**. Cash becomes **798**, holding quantity **2**, cost basis **202**, average cost **101**. Market valuation uses the current public price, so it will not equal the simulation price.
+6. Reserve and fill a **BTC sell**, quantity **1**, simulation price **120 USD**, fee **1 USD**. Cash becomes **917**, remaining basis **101**, and realized P&L **18 USD**. Check the fill in **Trade history**.
+7. Set **Maximum open positions** to **1**, then attempt an ETH buy while holding BTC: the server rejects it. Reserve a BTC sell and cancel it to see available quantity restored.
+
+All prices entered in the trade form are **simulation inputs**, not live execution quotes. There are no real deposits, exchange calls, or automatic orders. Stop-loss/take-profit settings are recorded on new buys; monitoring and automatic execution belong to Phase 7. Changing settings does not retroactively change accepted reservations.
+
+### Accounting and valuation
+
+- PostgreSQL is authoritative. Every state change locks the owned portfolio row and commits holdings, cash, order status and fill history together. Concurrent reservations cannot reuse cash or sell the same units.
+- Buy fees increase cost basis; sell fees reduce realized proceeds. Partial sales remove proportional average cost, and the final sale removes all remaining basis. Monetary storage and API strings use eight decimal places, with half-even rounding.
+- Available cash is cash minus pending buy notional and fees. Available holding quantity excludes pending sells. Pending buys reserve position slots. Maximum open trades counts all pending reservations; completed fills do not count.
+- Buy investment bounds include fees; sell exits bypass investment bounds but still require available units and an open-trade slot. Changing position/trade limits below existing usage is rejected.
+- Holdings use CoinGecko's top-50 USD prices only when timestamped within five minutes (up to 30 seconds clock skew). Missing, stale, or unsupported prices produce `null` total valuation/P&L/allocation and an explicit list of unpriced symbols; cash and realized P&L remain valid. Public reference valuation is distinct from simulated fill prices.
+- One paper portfolio per user. IDs are ownership-checked on every endpoint; another user's portfolio/order returns 404. Client order UUIDs provide retry idempotency; reusing one with different details returns 409. Fill/cancel retries are idempotent, conflicting terminal actions return 409.
+
+### Portfolio API
+
+All routes require the existing bearer authentication under `/api/v1`.
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET / POST | `/portfolios` | List owned portfolios / create once with `initial_cash` |
+| GET | `/portfolios/{id}` | Balances, P&L, allocation, holdings, pending trades, risk settings |
+| PUT | `/portfolios/{id}/risk` | Replace investment limits, max positions/trades, optional stop/target percentages |
+| POST | `/portfolios/{id}/orders/preview` | Check current risk and balances without reserving |
+| POST | `/portfolios/{id}/orders` | Reserve a paper order; checks risk again atomically |
+| POST | `/portfolios/{id}/orders/{order_id}/fill` | Record a simulated fill at its saved price/fee |
+| POST | `/portfolios/{id}/orders/{order_id}/cancel` | Release a pending reservation |
+| GET | `/portfolios/{id}/trades?limit=25&before=123` | Newest-first fills; follow `next_cursor` as `before` |
+
+Paper order bodies contain `client_order_id` (UUID), `symbol`, `side` (`buy`/`sell`), `quantity`, `simulation_price`, and `fee`. Use decimal strings. Risk fields are `min_investment`, `max_investment`, `max_open_positions`, `max_open_trades`, `stop_loss_pct`, and `take_profit_pct`; `null` disables a percentage threshold. Validation failures return 422, conflicts 409, and storage outages 503.
+
+Automated tests use synthetic prices. PostgreSQL accounting, ownership, cursor pagination, repeated fills and concurrent reservations run on CI's disposable `PREDICTION_TEST_DSN` service (also reused by the model registry tests). No live exchange funds or production database are used.

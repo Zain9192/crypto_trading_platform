@@ -44,3 +44,15 @@ Immutable operator-created model bundles live in a shared artifact volume. The e
 Authenticated prediction endpoints load the active version, verify file checksums and library versions, and check feature/provider/quote compatibility and candle freshness. The API volume is mounted read-only; the training process writes bundles. Models are cached by immutable version after verification. No HTTP endpoint trains, uploads or activates a model.
 
 Phase 4 confidence is an uncalibrated classifier probability. Estimated risk is recent candle-return volatility. Ranking is a transparent expected-return/probability/volatility heuristic. These outputs do not authorize trades or establish profitability. CI validates small real model training on synthetic fixtures and PostgreSQL registry behavior; production training and market performance evaluation require real history.
+
+## Phase 5: portfolio and risk
+
+`app/portfolio` separates pure Decimal accounting/risk validation from a PostgreSQL repository and application service. Authenticated `/api/v1/portfolios` routes expose the service. Each mutation first locks the owner-scoped `portfolios` row; reservations, settings changes, cancellations and fills serialize on that row. A fill changes cash, average-cost holdings, terminal order status and immutable fill records in one transaction. The UUID client key prevents duplicate reservation effects; terminal transitions are retry-safe.
+
+Migration `004_portfolio.sql` extends `portfolios` with paper cash/settings, adds `portfolio_holdings`, `portfolio_orders`, and `portfolio_trades`, and preserves old foundation rows in legacy mode. These paper orders are separate from the foundation `trade_orders` exchange placeholder. Phase 6/7 integrations must use an explicit execution adapter and preserve ownership, accounting and reservation invariants; paper fill endpoints must never become a live-order gateway.
+
+The service obtains a consistent portfolio snapshot inside the transaction, releases the lock, then values holdings with fresh top-50 CoinGecko USD quotes. Incomplete pricing is explicit and does not prevent users from cancelling reservations or reading cash/realized results. Derived total values are calculated per response; the foundation `portfolios.total_value` column is not the source of truth for current valuation.
+
+React adds a Portfolio & risk tab with memory-only authentication and coordinated refresh rotation, a per-session query cache identity, risk forms, holdings, pending paper trades and cursor-paginated history. Decimal request fields remain strings; JavaScript numbers are used only for display formatting and integer limits. The market tab remains public.
+
+Stop-loss and take-profit thresholds are recorded on buy reservations using the settings accepted at reservation time. They are not automatic exit orders. Exchange connectivity, automatic execution, alerts and production email delivery remain in their planned later phases.
