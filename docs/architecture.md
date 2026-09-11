@@ -1,6 +1,6 @@
-# Architecture through Phase 3
+# Architecture through Phase 4
 
-The application is a modular FastAPI backend with a React SPA. A separate market-ingestion process uses the same service/provider/repository modules as the API. Authentication and market data are implemented; prediction, portfolio/risk, exchange execution, and notifications remain later phases.
+The application is a modular FastAPI backend with a React SPA. A separate market-ingestion process uses the same service/provider/repository modules as the API. Authentication, market data and the Phase 4 prediction backend are implemented. Portfolio/risk management, exchange execution and notifications remain later phases.
 
 ```mermaid
 flowchart TD
@@ -31,3 +31,16 @@ Historical ingestion is a bounded initial backfill plus recurring updates, not a
 ## Delivery
 
 Phase 3 work is confined to `feature/market-data` and reviewed in PR #6. The owner merges into main. SonarQube is deferred by owner request; backend/frontend CI remains active.
+
+
+## Prediction architecture
+
+The offline `app.prediction.train` worker loads closed, continuous MongoDB candles. Features use only information available at each candle close. Chronological train/validation/test splits purge boundary labels, and preprocessing is fitted on training windows only. The worker trains a Random Forest direction classifier, an XGBoost return regressor and a TensorFlow/Keras LSTM return forecaster.
+
+The regressors are combined with fixed equal weights; their next-return forecasts convert to prices using the last close. Test data is evaluated once without fitting any parameters. Validation data supplies the reported empirical 95th-percentile absolute error; it is not a calibrated prediction interval. Long/cash backtesting delays execution by one bar and includes transition fees and final liquidation.
+
+Immutable operator-created model bundles live in a shared artifact volume. The existing PostgreSQL `ml_models` table stores bundle versions, checksums, split metadata, metrics and active-version status. Activation is explicit and serialized per symbol/interval. Forecasts are recorded in the existing `predictions` table. Redis remains a market cache and is not used as the model registry.
+
+Authenticated prediction endpoints load the active version, verify file checksums and library versions, and check feature/provider/quote compatibility and candle freshness. The API volume is mounted read-only; the training process writes bundles. Models are cached by immutable version after verification. No HTTP endpoint trains, uploads or activates a model.
+
+Phase 4 confidence is an uncalibrated classifier probability. Estimated risk is recent candle-return volatility. Ranking is a transparent expected-return/probability/volatility heuristic. These outputs do not authorize trades or establish profitability. CI validates small real model training on synthetic fixtures and PostgreSQL registry behavior; production training and market performance evaluation require real history.

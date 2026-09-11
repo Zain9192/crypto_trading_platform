@@ -142,9 +142,9 @@ Definition of done:
 - Frontend build/tests remain green.
 - GitHub Actions push and PR checks pass.
 
-### Phase 3 — Market Data — COMPLETE; READY FOR OWNER REVIEW
+### Phase 3 — Market Data — COMPLETE; MERGED
 
-Branch: `feature/market-data` — PR #6. Owner merge is still required.
+Branch: `feature/market-data` — PR #6 merged into main.
 
 | Planned requirement | Implementation |
 | --- | --- |
@@ -169,11 +169,14 @@ Gap review (2026-09-10):
 - Live provider quotas and a running Docker deployment have not been validated in this environment. CI uses mocked external systems.
 - Verification: 42 backend tests and 4 frontend tests passed locally; production build passed. Push and PR CI passed for the implementation commit.
 - CI evidence: https://github.com/Zain9192/crypto_trading_platform/actions/runs/34629130475
-- Phase 4 has not started.
+- Phase 4 proceeds on `feature/ai-prediction` after this merge.
 
-### Phase 4 — AI/ML Prediction
+### Phase 4 — AI/ML Prediction — CURRENT
 
-Implement:
+Branch: `feature/ai-prediction`. Step-by-step progress: [Phase 4 checklist](PHASE_4_CHECKLIST.md).
+
+Implemented; final CI validation pending:
+
 - Training dataset pipeline
 - Chronological train/validation/test splitting; never random-split time series
 - Feature engineering from OHLCV and indicators
@@ -360,7 +363,7 @@ Automated tests must not depend on real exchange funds or unstable third-party A
 1. Foundation — complete
 2. Authentication — complete
 3. Market data — complete
-4. AI/ML prediction
+4. AI/ML prediction — current
 5. Portfolio and risk
 6. Exchange integration
 7. Automated trading engine

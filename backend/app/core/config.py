@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     ohlcv_cache_ttl_seconds: int = 60
     market_http_timeout_seconds: float = 10.0
 
+    prediction_artifact_dir: str = "model_artifacts"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

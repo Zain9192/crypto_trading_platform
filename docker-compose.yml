@@ -64,6 +64,7 @@ services:
       COINGECKO_BASE_URL: ${COINGECKO_BASE_URL:-https://api.coingecko.com/api/v3}
       BINANCE_MARKET_BASE_URL: ${BINANCE_MARKET_BASE_URL:-https://api.binance.com}
       MARKET_DEFAULT_QUOTE_ASSET: ${MARKET_DEFAULT_QUOTE_ASSET:-USDT}
+      PREDICTION_ARTIFACT_DIR: /app/model_artifacts
       MARKET_REFRESH_SECONDS: ${MARKET_REFRESH_SECONDS:-30}
       MARKET_HISTORY_REFRESH_SECONDS: ${MARKET_HISTORY_REFRESH_SECONDS:-900}
       MARKET_HISTORY_CANDLE_LIMIT: ${MARKET_HISTORY_CANDLE_LIMIT:-200}
@@ -71,6 +72,8 @@ services:
       MARKET_CACHE_TTL_SECONDS: ${MARKET_CACHE_TTL_SECONDS:-25}
       OHLCV_CACHE_TTL_SECONDS: ${OHLCV_CACHE_TTL_SECONDS:-60}
       MARKET_HTTP_TIMEOUT_SECONDS: ${MARKET_HTTP_TIMEOUT_SECONDS:-10}
+    volumes:
+      - model_artifacts:/app/model_artifacts:ro
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:
@@ -95,6 +98,22 @@ services:
       redis:
         condition: service_started
 
+  prediction-trainer:
+    profiles: ["training"]
+    build:
+      context: ./backend
+    entrypoint: ["python", "-m", "app.prediction.train"]
+    command: ["--help"]
+    environment:
+      <<: *backend-environment
+    volumes:
+      - model_artifacts:/app/model_artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
+
   frontend:
     build:
       context: ./frontend
@@ -104,6 +123,7 @@ services:
       - backend
 
 volumes:
+  model_artifacts:
   postgres_data:
   mongo_data:
   redis_data:
