@@ -80,3 +80,22 @@ def test_websocket_reports_provider_error(market_client):
     service.get_top_assets.side_effect = ProviderError("Provider unavailable")
     with client.websocket_connect("/api/v1/market/ws/prices") as socket:
         assert socket.receive_json() == {"type": "error", "detail": "Provider unavailable"}
+
+
+def test_persisted_history_endpoint(market_client):
+    client, service = market_client
+    service.get_history.return_value = []
+    response = client.get("/api/v1/market/history/BTC?interval=1w&limit=20")
+    assert response.status_code == 200
+    assert response.json()["source"] == "mongodb"
+    assert response.json()["items"] == []
+    service.get_history.assert_called_once_with("BTC", "1w", 20)
+
+
+def test_history_storage_failure_is_explicit(market_client):
+    from pymongo.errors import PyMongoError
+    client, service = market_client
+    service.get_history.side_effect = PyMongoError("Database unavailable")
+    response = client.get("/api/v1/market/history/BTC")
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Market history storage unavailable"

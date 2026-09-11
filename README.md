@@ -508,3 +508,35 @@ docker compose exec mongodb mongosh crypto_market
 11. Deployment/operations
 
 See [`docs/PROJECT_EXECUTION_PLAN.md`](docs/PROJECT_EXECUTION_PLAN.md) for the fixed scope and architecture rules.
+
+
+## Phase 3 background ingestion and stored history
+
+`docker compose up --build` also starts the `market-ingestion` worker. For a local Python setup with MongoDB and Redis available, run this from `backend`:
+
+```bash
+python -m app.market.workers.ingestion
+```
+
+The worker refreshes the top-50 price cache separately from historical ingestion. It fetches a bounded window for each supported Binance pair and all five chart intervals, and upserts by symbol/interval/timestamp. Existing candles update without duplicate records. Unsupported pairs and temporary failures are logged and retried next cycle.
+
+| Setting | Default | Behavior |
+| --- | --- | --- |
+| `MARKET_REFRESH_SECONDS` | 30 | Price refresh and frontend polling cadence in seconds |
+| `MARKET_HISTORY_REFRESH_SECONDS` | 900 | Delay between completed history cycles |
+| `MARKET_HISTORY_CANDLE_LIMIT` | 200 | Candles per asset/interval, from 20 to 1000 |
+| `MARKET_INGESTION_REQUEST_SPACING_SECONDS` | 0.25 | Pause between history requests |
+
+A full history cycle can take several minutes and does not block the price loop. Adjust cadence and pacing for the provider's quota. Candle responses may remain cached for `OHLCV_CACHE_TTL_SECONDS` even when the frontend polls more frequently.
+
+Read the saved history with:
+
+```bash
+curl "http://localhost:8000/api/v1/market/history/BTC?interval=1d&limit=200"
+```
+
+This endpoint returns `source: mongodb`, an empty list if no history has been stored, and HTTP 503 when storage is unavailable. It does not silently substitute old history into the live OHLCV endpoint. Stored history may be older than the current market.
+
+Indicators use TA-Lib, as specified in the plan. Warm-up values are null until enough candles exist. The candlestick chart includes volume bars and preserves zoom/pan during automatic refresh.
+
+SonarQube is deferred at the owner's request; its workflow and project configuration have been removed. Backend tests, frontend tests/build, and the existing Checkstyle job remain in CI.

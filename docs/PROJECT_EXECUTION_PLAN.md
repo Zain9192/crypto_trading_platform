@@ -142,34 +142,32 @@ Definition of done:
 - Frontend build/tests remain green.
 - GitHub Actions push and PR checks pass.
 
-### Phase 3 — Market Data — IMPLEMENTED; FINAL QUALITY CHECK PENDING
+### Phase 3 — Market Data — IMPLEMENTED; CI VALIDATION PENDING
 
-Branch: `feature/market-data`
+Branch: `feature/market-data` — PR #6. Owner merge is still required.
 
-Implement:
-- Public market provider/exchange integration
-- Top-50 asset list
-- Normalized OHLCV model
-- Historical OHLCV ingestion
-- MongoDB persistence
-- Redis latest-price cache
-- Market REST endpoints
-- Live-price WebSocket channel
-- Candlestick chart integration
-- RSI, MACD, EMA, MA, Bollinger Bands, volume indicators
-- Tests with provider calls mocked
+| Planned requirement | Implementation |
+| --- | --- |
+| Public provider integration and top-50 list | CoinGecko market snapshots; Binance candles for supported pairs |
+| Normalized OHLCV | Canonical Pydantic schemas; UTC timestamps; five planned intervals |
+| Historical ingestion | Runnable worker, bounded backfill and recurring refresh, independent price/history loops |
+| MongoDB persistence | Idempotent candle upserts and explicit saved-history REST endpoint |
+| Redis latest-price cache | Snapshot, per-symbol latest price, and candle-window caching |
+| REST endpoints | Assets, asset detail, live OHLCV, saved history, and indicators |
+| Live WebSocket | Snapshot channel, provider errors, disconnect handling, frontend reconnect and REST recovery |
+| Candlestick charts | Interval selection, automatic refresh, preserved zoom, candle-volume bars |
+| RSI, MACD, EMA, MA, Bollinger Bands, volume | TA-Lib calculations, warm-up nulls, indicator cards and volume chart |
+| Mocked tests | Provider, service, ingestion, API/WebSocket, indicator, and frontend behavior tests |
 
-Verification (2026-09-10):
-- Reconciled the unmerged feature branch with main; consolidated market schema exports to prevent import shadowing.
-- REST routes and WebSocket are mounted in the actual FastAPI application.
-- Added integration coverage for all five candle intervals, invalid limits, provider errors, WebSocket snapshots and disconnects.
-- Backend: 34 tests passed locally; GitHub backend job passed.
-- Frontend: test and production build passed locally and in GitHub CI.
-- CI evidence: https://github.com/Zain9192/crypto_trading_platform/actions/runs/34488044820
-- Checkstyle reported no Java sources, as expected for this Python/TypeScript project.
-- SonarQube still reports `startup_failure` before creating any jobs; no analysis or quality-gate result is available. This also occurs on main.
-- Sonar evidence: https://github.com/Zain9192/crypto_trading_platform/actions/runs/34488046114
-- Phase 3 remains pending final quality validation and owner merge; Phase 4 has not started.
+Gap review (2026-09-10):
+- Replaced the normalization-only worker with a runnable ingestion process and Compose service.
+- Added retrieval of stored history and explicit storage errors.
+- Applied server-configured refresh to frontend prices, candles, and indicators.
+- Replaced custom indicator calculations with the planned TA-Lib library.
+- Updated architecture and operational documentation to describe the implementation and bounded historical coverage.
+- SonarQube removed at the owner's request; it may be reintroduced later. Backend/frontend CI and Checkstyle remain active.
+- Live provider quotas and a running Docker deployment have not been validated in this environment. CI uses mocked external systems.
+- Phase 4 has not started.
 
 ### Phase 4 — AI/ML Prediction
 

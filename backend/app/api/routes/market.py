@@ -6,6 +6,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 
+from pymongo.errors import PyMongoError
+
 from app.core.config import get_settings
 from app.market.dependencies import get_market_service
 from app.market.providers import ProviderError
@@ -71,6 +73,26 @@ def get_ohlcv(
         items=candles,
         count=len(candles),
         cached=cached,
+    )
+
+
+@router.get("/history/{symbol}", response_model=OhlcvResponse)
+def get_history(
+    symbol: str,
+    service: Annotated[MarketService, Depends(get_market_service)],
+    interval: MarketInterval = Query(default="1d"),
+    limit: int = Query(default=200, ge=20, le=1000),
+) -> OhlcvResponse:
+    """Read persisted history without requiring a successful live provider request."""
+    try:
+        candles = service.get_history(symbol, interval, limit)
+    except PyMongoError as exc:
+        raise HTTPException(status_code=503, detail="Market history storage unavailable") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return OhlcvResponse(
+        symbol=symbol.upper().strip(), interval=interval, items=candles,
+        count=len(candles), cached=False, source="mongodb",
     )
 
 

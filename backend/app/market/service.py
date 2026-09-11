@@ -61,6 +61,19 @@ class MarketService:
         self.cache.set_ohlcv(normalized, interval, limit, candles, self.ohlcv_cache_ttl_seconds)
         return candles, False
 
+    def ingest_ohlcv(self, symbol: str, interval: MarketInterval, limit: int = 200) -> int:
+        """Refresh and durably persist candles; persistence errors must reach the worker."""
+        candles = self.ohlcv_provider.fetch_ohlcv(symbol.upper().strip(), interval, limit)
+        self.repository.upsert_ohlcv(candles)
+        self.cache.set_ohlcv(symbol, interval, limit, candles, self.ohlcv_cache_ttl_seconds)
+        return len(candles)
+
+    def get_history(self, symbol: str, interval: MarketInterval, limit: int = 200) -> list[OhlcvCandle]:
+        normalized = symbol.upper().strip()
+        if not normalized:
+            raise ValueError("Symbol is required")
+        return self.repository.get_ohlcv(normalized, interval, limit)
+
     def get_indicators(self, symbol: str, interval: MarketInterval, limit: int = 200) -> list[IndicatorPoint]:
         fetch_limit = min(max(limit, 50), 1000)
         candles, _ = self.get_ohlcv(symbol, interval, fetch_limit)

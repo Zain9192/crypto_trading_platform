@@ -5,11 +5,10 @@ import {
   fetchIndicators,
   fetchOhlcv,
   fetchTopAssets,
-  type MarketAsset,
   type MarketAssetsResponse,
   type MarketInterval,
 } from '../api/market'
-import { useMarketSocket } from '../hooks/useMarketSocket'
+import { useMarketSocket, type MarketSnapshotMessage } from '../hooks/useMarketSocket'
 import CandlestickChart from './CandlestickChart'
 
 const intervals: MarketInterval[] = ['1h', '4h', '1d', '1w', '1M']
@@ -41,18 +40,18 @@ export default function MarketDashboard() {
   const assetsQuery = useQuery({
     queryKey: ['market-assets'],
     queryFn: () => fetchTopAssets(50),
-    staleTime: 25_000,
-    refetchInterval: 30_000,
+    staleTime: 0,
+    refetchInterval: (query) => (query.state.data?.refresh_seconds ?? 30) * 1000,
     retry: 1,
   })
 
   const updateFromSocket = useCallback(
-    (items: MarketAsset[]) => {
+    (message: MarketSnapshotMessage) => {
       queryClient.setQueryData<MarketAssetsResponse>(['market-assets'], (existing) => ({
-        items,
-        count: items.length,
+        items: message.items,
+        count: message.items.length,
         cached: true,
-        refresh_seconds: existing?.refresh_seconds ?? 30,
+        refresh_seconds: message.refresh_seconds,
         source: existing?.source ?? 'coingecko',
       }))
     },
@@ -60,17 +59,21 @@ export default function MarketDashboard() {
   )
   useMarketSocket(updateFromSocket)
 
+  const refreshSeconds = assetsQuery.data?.refresh_seconds ?? 30
+
   const ohlcvQuery = useQuery({
     queryKey: ['ohlcv', selectedSymbol, interval],
     queryFn: () => fetchOhlcv(selectedSymbol, interval, 200),
-    staleTime: 60_000,
+    staleTime: 0,
+    refetchInterval: refreshSeconds * 1000,
     retry: 1,
   })
 
   const indicatorsQuery = useQuery({
     queryKey: ['indicators', selectedSymbol, interval],
     queryFn: () => fetchIndicators(selectedSymbol, interval, 200),
-    staleTime: 60_000,
+    staleTime: 0,
+    refetchInterval: refreshSeconds * 1000,
     retry: 1,
   })
 
@@ -88,7 +91,7 @@ export default function MarketDashboard() {
             <p className="eyebrow">Live market feed</p>
             <h2>Top 50 cryptocurrencies</h2>
           </div>
-          <span className="live-pill"><span className="status-dot" />30s refresh</span>
+          <span className="live-pill"><span className="status-dot" />{refreshSeconds}s refresh</span>
         </div>
         {assetsQuery.isError && <p className="error-banner">{assetsQuery.error.message}</p>}
         <div className="market-table-wrap">
@@ -145,11 +148,12 @@ export default function MarketDashboard() {
         </div>
         {ohlcvQuery.isError && <p className="error-banner">{ohlcvQuery.error.message}</p>}
         {ohlcvQuery.data?.items.length ? (
-          <CandlestickChart candles={ohlcvQuery.data.items} />
+          <CandlestickChart key={`${selectedSymbol}-${interval}`} candles={ohlcvQuery.data.items} />
         ) : (
           <div className="chart-placeholder">{ohlcvQuery.isLoading ? 'Loading candles…' : 'No candle data available.'}</div>
         )}
 
+        {indicatorsQuery.isError && <p className="error-banner">{indicatorsQuery.error.message}</p>}
         <div className="indicator-grid">
           <div><span>RSI 14</span><strong>{indicatorValue(latestIndicators?.rsi_14)}</strong></div>
           <div><span>SMA 20</span><strong>{indicatorValue(latestIndicators?.sma_20, 4)}</strong></div>
