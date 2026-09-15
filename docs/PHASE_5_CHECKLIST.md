@@ -18,5 +18,5 @@ Verification:
 - 10 frontend tests, TypeScript checking and production build passed.
 - Final implementation CI: https://github.com/Zain9192/crypto_trading_platform/actions/runs/34636244117
 - Review PR: https://github.com/Zain9192/crypto_trading_platform/pull/9
-- Owner merge remains pending. Phase 6 has not started.
+- PR #9 merged on 2026-09-11. Phase 6 has started on `feature/exchange-integration`.
 - Live deployment and provider integration were not exercised here; README contains the migration and frontend walkthrough.

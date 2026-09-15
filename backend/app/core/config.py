@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     ohlcv_cache_ttl_seconds: int = 60
     market_http_timeout_seconds: float = 10.0
 
+    exchange_encryption_key: SecretStr = SecretStr("")
     prediction_artifact_dir: str = "model_artifacts"
 
     model_config = SettingsConfigDict(

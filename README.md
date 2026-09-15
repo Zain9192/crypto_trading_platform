@@ -652,3 +652,9 @@ All routes require the existing bearer authentication under `/api/v1`.
 Paper order bodies contain `client_order_id` (UUID), `symbol`, `side` (`buy`/`sell`), `quantity`, `simulation_price`, and `fee`. Use decimal strings. Risk fields are `min_investment`, `max_investment`, `max_open_positions`, `max_open_trades`, `stop_loss_pct`, and `take_profit_pct`; `null` disables a percentage threshold. Validation failures return 422, conflicts 409, and storage outages 503.
 
 Automated tests use synthetic prices. PostgreSQL accounting, ownership, cursor pagination, repeated fills and concurrent reservations run on CI's disposable `PREDICTION_TEST_DSN` service (also reused by the model registry tests). No live exchange funds or production database are used.
+
+## Phase 6 — Exchange integration
+
+The signed-in account workspace now includes **Exchange connections** for Binance, Coinbase Advanced Trade and Kraken. Save/replace encrypted credentials and inspect balances, prices, existing orders and recent trades. Production access remains read-only; Binance spot testnet is supported and unsupported sandbox choices fail explicitly.
+
+For existing deployments, apply `database/postgres/005_exchange.sql`, configure a dedicated `EXCHANGE_ENCRYPTION_KEY`, then rebuild Compose. See [Phase 6 operations](docs/PHASE_6_OPERATIONS.md) for setup, APIs, capability limits and key rotation, and [Phase 6 checklist](docs/PHASE_6_CHECKLIST.md) for verification status.

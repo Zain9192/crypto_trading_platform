@@ -8,7 +8,7 @@ export default function App() {
     <main className="app-shell">
       <header className="app-header">
         <div>
-          <p className="eyebrow">Market, portfolio & risk · Phase 5</p>
+          <p className="eyebrow">Market, portfolio & exchanges · Phase 6</p>
           <h1>AI Crypto Trading Platform</h1>
           <p className="subtitle">Explore market data, practice portfolio management, and test risk controls.</p>
         </div>

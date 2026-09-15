@@ -56,3 +56,11 @@ The service obtains a consistent portfolio snapshot inside the transaction, rele
 React adds a Portfolio & risk tab with memory-only authentication and coordinated refresh rotation, a per-session query cache identity, risk forms, holdings, pending paper trades and cursor-paginated history. Decimal request fields remain strings; JavaScript numbers are used only for display formatting and integer limits. The market tab remains public.
 
 Stop-loss and take-profit thresholds are recorded on buy reservations using the settings accepted at reservation time. They are not automatic exit orders. Exchange connectivity, automatic execution, alerts and production email delivery remain in their planned later phases.
+
+## Phase 6: exchange integration
+
+CCXT-backed Binance, Coinbase and Kraken adapters implement the shared spot protocol. Fixed provider/environment configuration prevents arbitrary endpoint injection. Sandbox is selected before any network-capable call. Production access is read-only; unsupported spot sandboxes fail explicitly. Provider exceptions and malformed data become sanitized application errors.
+
+PostgreSQL `exchange_connections` owns AES-256-GCM credential envelopes by user, exchange and connection UUID. All repository operations scope by owner; metadata responses exclude ciphertext. The dedicated key stays in external configuration, and the offline rotation command re-encrypts rows transactionally. HTTP validation errors omit raw credential inputs.
+
+The authenticated exchange API and React account workspace support connection lifecycle and account reads. Private query caches stay isolated from other sessions and paper portfolios. No HTTP exchange mutations exist. Internal testnet order placement requires a risk validator; Phase 7 adds atomic reservations, reconciliation and execution lifecycle. Every request closes its transport session.
