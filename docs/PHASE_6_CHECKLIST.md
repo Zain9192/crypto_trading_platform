@@ -1,28 +1,19 @@
 # Phase 6 — Exchange Integration
 
-Branch: `feature/exchange-integration`, from merged Phase 5 PR #9.
-Phase 5 main CI succeeded: https://github.com/Zain9192/crypto_trading_platform/actions/runs/34644794117
+Branch: `feature/exchange-integration`; PR #10 from merged Phase 5 PR #9.
 
-## Completed implementation for this first increment
+- [x] Shared spot protocol and Decimal contracts for all seven planned operations.
+- [x] Pinned CCXT dependency; Binance, Coinbase Advanced Trade and Kraken adapters.
+- [x] Provider capability review; Binance spot testnet and explicit unsupported-sandbox errors.
+- [x] Safe provider errors, precision/limit validation and bounded since/limit trade queries.
+- [x] AES-256-GCM credential persistence, owner-scoped migration/repository and safe metadata responses.
+- [x] Dedicated external key configuration and atomic offline re-encryption command.
+- [x] Authenticated credential lifecycle, verification, balances, prices, order state and trade APIs.
+- [x] Frontend connection management, masked stored keys, read-only status and account inspection.
+- [x] No public exchange mutations; internal testnet placement requires a risk validator, tested with Phase 5 validation.
+- [x] Adapter, API, PostgreSQL and frontend tests; migration and operations documentation.
+- [ ] Local verification, final push/PR CI, and mark PR #10 ready for owner review.
 
-- [x] Shared spot exchange protocol: connect, balances, prices, place/cancel/get order, trade retrieval.
-- [x] Decimal request/response contracts; reject derivatives, invalid numbers and invalid order combinations.
-- [x] Read-only default and explicit supported-sandbox mutation policy; no fallback to live trading.
-- [x] AES-256-GCM credential helper with randomized nonces and owner/exchange/connection binding.
-- [x] Unit tests for precision, validation, redaction, mutation policy, encryption, tampering and substitution.
+Implementation restored on 2026-09-15. Final verification is in progress.
 
-## Remaining Phase 6 work
-
-- [ ] CCXT dependency and Binance, Coinbase and Kraken transport adapters.
-- [ ] Verify each exchange's current spot sandbox capabilities using official documentation. Report unsupported sandbox operations explicitly.
-- [ ] Normalize transport failures, precision, balances, order status and trade pagination; mock provider tests.
-- [ ] PostgreSQL connection migration/repository storing encrypted credentials only, with authenticated ownership checks.
-- [ ] Configure a dedicated external exchange-encryption key and document rotation/re-encryption.
-- [ ] Authenticated connection, balance, price, order-status and trade-history APIs.
-- [ ] Frontend exchange connection management with masked credentials and clear read-only/sandbox status.
-- [ ] Connect adapter mutation entry points to the Phase 5 risk boundary before exposing any order submission.
-- [ ] Run adapter/API/database tests and complete CI and operational documentation.
-
-This increment provides contracts and cryptographic building blocks, not runnable exchange connectivity. No exchange credentials are persisted yet and no exchange HTTP routes are exposed. Automated bots, reconciliation after fills and stop-loss/take-profit execution remain Phase 7.
-
-The development workspace was unavailable for this increment; validation runs in GitHub Actions. No local execution or live/sandbox exchange calls are claimed.
+See [operations](PHASE_6_OPERATIONS.md) for setup and capability limits. Automated execution, atomic exchange reservations, reconciliation and bot controls remain Phase 7. No live provider/deployment smoke tests are claimed.

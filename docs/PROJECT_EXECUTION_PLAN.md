@@ -214,7 +214,7 @@ Delivered:
 
 ### Phase 6 — Exchange Integration — IN PROGRESS
 
-Branch: `feature/exchange-integration`. Progress: [Phase 6 checklist](PHASE_6_CHECKLIST.md). The first increment adds exchange contracts and credential encryption helpers; transport adapters, persistence, APIs and UI remain pending.
+Branch: `feature/exchange-integration`. Progress: [Phase 6 checklist](PHASE_6_CHECKLIST.md). The adapters, encrypted connection storage, read-only APIs and frontend are implemented. Final validation is in progress; [operations](PHASE_6_OPERATIONS.md) documents provider limits and the Phase 7 execution boundary.
 
 Implement an exchange abstraction with operations similar to:
 

@@ -173,3 +173,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .portfolio-shell .section-heading h3 { margin: 0; }
 @media (max-width: 800px) { .portfolio-columns { grid-template-columns: 1fr; } .portfolio-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 440px) { .portfolio-metrics { grid-template-columns: 1fr; } }
+
+.portfolio-form textarea, .portfolio-shell select { width: 100%; min-width: 0; color: #e7edf7; border: 1px solid #365575; border-radius: 7px; padding: 10px; background: #08182c; font: inherit; }
+.portfolio-form textarea { resize: vertical; }
+.portfolio-shell dd { margin: 4px 0 12px; overflow-wrap: anywhere; }
+.portfolio-shell dt { color: #a8bad0; }

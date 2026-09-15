@@ -3,12 +3,14 @@ import type { FormEvent } from 'react'
 import { api, ApiError } from '../api/portfolio'
 import type { Tokens } from '../api/portfolio'
 import PortfolioDashboard from './PortfolioDashboard'
+import ExchangeDashboard from './ExchangeDashboard'
 
 export default function PortfolioAccess() {
   // Tokens live only in memory; reloading requires sign-in. No browser storage.
   const session = useRef<Tokens | null>(null)
   const refreshing = useRef<Promise<Tokens> | null>(null)
   const [signedIn, setSignedIn] = useState(false)
+  const [section, setSection] = useState<'portfolio' | 'exchanges'>('portfolio')
   const [mode, setMode] = useState<'login' | 'register' | 'verify'>('login')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -69,9 +71,13 @@ export default function PortfolioAccess() {
     finally { setBusy(false) }
   }
   if (signedIn) return <section className="portfolio-shell">
-    <div className="portfolio-toolbar"><span className="live-pill">Paper portfolio · Virtual USD</span><button disabled={busy} onClick={logout}>Sign out</button></div>
+    <div className="portfolio-toolbar"><span className="live-pill">Account workspace</span><button disabled={busy} onClick={logout}>Sign out</button></div>
     {error && <p role="alert" className="error-banner">{error}</p>}
-    <PortfolioDashboard request={request} />
+    <nav className="portfolio-toolbar" aria-label="Account sections">
+      <button aria-pressed={section === 'portfolio'} onClick={() => setSection('portfolio')}>Paper portfolio</button>
+      <button aria-pressed={section === 'exchanges'} onClick={() => setSection('exchanges')}>Exchange connections</button>
+    </nav>
+    {section === 'portfolio' ? <PortfolioDashboard request={request} /> : <ExchangeDashboard request={request} />}
   </section>
   return <section className="portfolio-shell market-panel auth-panel">
     <p className="eyebrow">Portfolio & risk</p><h2>{mode === 'login' ? 'Sign in to your portfolio' : mode === 'register' ? 'Create an account' : 'Verify your email'}</h2>

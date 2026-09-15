@@ -1,7 +1,6 @@
-"""Authenticated encryption for future exchange credential persistence.
+"""Authenticated encryption for exchange credential persistence.
 
-This helper does not persist credentials or expose an HTTP endpoint. The future
-repository must supply owner/connection identity from trusted database records.
+The repository supplies owner/connection identity from trusted database records.
 Use a dedicated, externally supplied 32-byte key, separate from JWT/auth keys.
 """
 import base64
