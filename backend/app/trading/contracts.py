@@ -21,7 +21,7 @@ class BotConfig(Contract):
     symbol: Symbol
     interval: MarketInterval = "1d"
     mode: Literal["paper"] = "paper"
-    enabled: Literal[False] = False
+    enabled: bool = Field(default=False, strict=True)
     confidence_threshold: Decimal = Field(default=Decimal("0.7"), ge=Decimal("0.5"), le=1, allow_inf_nan=False)
     order_amount: Positive
     max_open_trades: int = Field(default=1, ge=1, le=100)
@@ -32,4 +32,4 @@ class BotConfig(Contract):
 class BotSnapshot(Contract):
     bot_id: UUID
     config: BotConfig
-    state: Literal[BotState.STOPPED] = BotState.STOPPED
+    state: BotState = BotState.STOPPED
