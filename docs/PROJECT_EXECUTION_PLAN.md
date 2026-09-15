@@ -212,9 +212,9 @@ Delivered:
 - Risk validation service
 - Portfolio/trade-history APIs and UI
 
-### Phase 6 — Exchange Integration — IN PROGRESS
+### Phase 6 — Exchange Integration — COMPLETE (owner merge pending)
 
-Branch: `feature/exchange-integration`. Progress: [Phase 6 checklist](PHASE_6_CHECKLIST.md). The adapters, encrypted connection storage, read-only APIs and frontend are implemented. Final validation is in progress; [operations](PHASE_6_OPERATIONS.md) documents provider limits and the Phase 7 execution boundary.
+Branch: `feature/exchange-integration`. Progress: [Phase 6 checklist](PHASE_6_CHECKLIST.md). The adapters, encrypted connection storage, read-only APIs and frontend are implemented. Validation passed: 147 backend tests and 14 frontend tests in CI, with the production build. Owner review and merge of PR #10 remain; [operations](PHASE_6_OPERATIONS.md) documents provider limits and the Phase 7 execution boundary.
 
 Implement an exchange abstraction with operations similar to:
 
