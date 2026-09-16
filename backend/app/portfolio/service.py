@@ -87,7 +87,7 @@ class PortfolioService:
                 (portfolio_id, request.symbol + '/USD')).fetchone()['quantity']
             held = next((h['quantity'] for h in holdings if h['symbol'] == request.symbol), ZERO)
             _, reserved = reservations(pending)
-            if request.quantity > held - protected - reserved.get(request.symbol, ZERO):
+            if protected > 0 and request.quantity > held - protected - reserved.get(request.symbol, ZERO):
                 raise PortfolioError('Bot-managed units must be closed through the bot', 409)
         result = validate_order(p, holdings, pending, request, RiskSettings.model_validate(p["risk_settings"]))
         return c.execute("""INSERT INTO portfolio_orders
