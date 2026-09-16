@@ -3,9 +3,10 @@ from enum import Enum
 from typing import Literal
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
-from app.exchange.contracts import Contract, Positive, Symbol
+from app.exchange.contracts import Contract, Symbol
+from app.portfolio.schemas import Positive
 from app.market.schemas import MarketInterval
 
 
@@ -27,6 +28,14 @@ class BotConfig(Contract):
     max_open_trades: int = Field(default=1, ge=1, le=100)
     stop_loss_pct: Decimal | None = Field(default=None, gt=0, lt=100, allow_inf_nan=False)
     take_profit_pct: Decimal | None = Field(default=None, gt=0, allow_inf_nan=False)
+
+    @field_validator("symbol")
+    @classmethod
+    def paper_currency(cls, value):
+        base, quote = value.split("/")
+        if quote != "USD" or len(base) > 20:
+            raise ValueError("Paper bots require a BASE/USD pair")
+        return value
 
 
 class BotSnapshot(Contract):

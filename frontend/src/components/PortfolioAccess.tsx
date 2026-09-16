@@ -4,13 +4,14 @@ import { api, ApiError } from '../api/portfolio'
 import type { Tokens } from '../api/portfolio'
 import PortfolioDashboard from './PortfolioDashboard'
 import ExchangeDashboard from './ExchangeDashboard'
+import TradingDashboard from './TradingDashboard'
 
 export default function PortfolioAccess() {
   // Tokens live only in memory; reloading requires sign-in. No browser storage.
   const session = useRef<Tokens | null>(null)
   const refreshing = useRef<Promise<Tokens> | null>(null)
   const [signedIn, setSignedIn] = useState(false)
-  const [section, setSection] = useState<'portfolio' | 'exchanges'>('portfolio')
+  const [section, setSection] = useState<'portfolio' | 'exchanges' | 'bots'>('portfolio')
   const [mode, setMode] = useState<'login' | 'register' | 'verify'>('login')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -76,8 +77,9 @@ export default function PortfolioAccess() {
     <nav className="portfolio-toolbar" aria-label="Account sections">
       <button aria-pressed={section === 'portfolio'} onClick={() => setSection('portfolio')}>Paper portfolio</button>
       <button aria-pressed={section === 'exchanges'} onClick={() => setSection('exchanges')}>Exchange connections</button>
+      <button aria-pressed={section === 'bots'} onClick={() => setSection('bots')}>Trading bots</button>
     </nav>
-    {section === 'portfolio' ? <PortfolioDashboard request={request} /> : <ExchangeDashboard request={request} />}
+    {section === 'portfolio' ? <PortfolioDashboard request={request} /> : section === 'exchanges' ? <ExchangeDashboard request={request} /> : <TradingDashboard request={request} />}
   </section>
   return <section className="portfolio-shell market-panel auth-panel">
     <p className="eyebrow">Portfolio & risk</p><h2>{mode === 'login' ? 'Sign in to your portfolio' : mode === 'register' ? 'Create an account' : 'Verify your email'}</h2>

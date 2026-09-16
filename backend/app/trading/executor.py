@@ -1,36 +1,17 @@
-from dataclasses import dataclass
 from decimal import Decimal
 
-from app.trading.contracts import BotSnapshot
-
-
-@dataclass(frozen=True)
-class ExecutionResult:
-    approved: bool
-    reason: str
-    action: str | None = None
+from app.portfolio.schemas import PaperOrderCreate
+from app.portfolio.service import PortfolioService
+from app.trading.orders import client_order_id
 
 
 class TradingExecutor:
-    """Coordinates validated trading decisions before exchange execution."""
+    def __init__(self, repository):
+        self.portfolio = PortfolioService(repository, None)
 
-    def evaluate_signal(
-        self,
-        bot: BotSnapshot,
-        confidence: Decimal,
-        balance_available: Decimal,
-        open_trades: int,
-    ) -> ExecutionResult:
-        if not bot.config.enabled:
-            return ExecutionResult(False, "bot_disabled")
-
-        if confidence < bot.config.confidence_threshold:
-            return ExecutionResult(False, "confidence_below_threshold")
-
-        if balance_available < bot.config.order_amount:
-            return ExecutionResult(False, "insufficient_balance")
-
-        if open_trades >= bot.config.max_open_trades:
-            return ExecutionResult(False, "maximum_open_trades_reached")
-
-        return ExecutionResult(True, "approved", "execute_spot_order")
+    def fill(self, c, row, config, event_key, side, quantity, price):
+        request = PaperOrderCreate(client_order_id=client_order_id(row['bot_id'], event_key),
+                                   symbol=config.symbol.split('/')[0], side=side,
+                                   quantity=quantity, simulation_price=price, fee=Decimal('0'))
+        order = self.portfolio.reserve_in_transaction(c, row['user_id'], config.portfolio_id, request, managed=True)
+        return self.portfolio.complete_in_transaction(c, row['user_id'], config.portfolio_id, order['order_id'], 'fill')

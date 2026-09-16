@@ -47,6 +47,17 @@ jobs:
       - name: Install backend dependencies
         run: python -m pip install -r requirements.txt
 
+      - name: Apply PostgreSQL migrations
+        run: |
+          python - <<'PYTHON'
+          import os
+          from pathlib import Path
+          import psycopg
+          with psycopg.connect(os.environ["PREDICTION_TEST_DSN"]) as connection:
+              for migration in sorted(Path("../database/postgres").glob("*.sql")):
+                  connection.execute(migration.read_text())
+          PYTHON
+
       - name: Run backend tests
         run: python -m pytest -q
 

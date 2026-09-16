@@ -32,8 +32,7 @@ _TRANSITIONS = {
 
 
 def transition(bot: BotSnapshot, event: BotEvent) -> BotSnapshot:
-    # Pure state calculation. A future service must persist under a lock and
-    # verify ownership, risk settings and worker readiness before starting.
+    # Pure state calculation; TradingService owns authorization and persistence.
     event = BotEvent(event)
     if event == BotEvent.START and not bot.config.enabled:
         raise InvalidBotTransition("Enable the bot configuration before starting")
