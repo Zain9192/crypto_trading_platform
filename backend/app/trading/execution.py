@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
@@ -17,6 +17,14 @@ class Signal(str, Enum):
 class RiskDecision(str, Enum):
     APPROVED = "approved"
     REJECTED = "rejected"
+
+
+class OrderStatus(str, Enum):
+    CREATED = "created"
+    SUBMITTED = "submitted"
+    FILLED = "filled"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class TradingSignal(BaseModel):
@@ -39,6 +47,13 @@ class OrderIntent:
     amount: Decimal
 
 
+@dataclass(frozen=True)
+class ExecutionOrder:
+    order_id: UUID
+    intent: OrderIntent
+    status: OrderStatus
+
+
 class RiskValidator:
     def validate(
         self,
@@ -56,9 +71,19 @@ class RiskValidator:
         return ExecutionDecision(True, RiskDecision.APPROVED, "Risk checks passed")
 
 
+class ExchangeExecutionAdapter:
+    def submit(self, intent: OrderIntent) -> ExecutionOrder:
+        return ExecutionOrder(
+            order_id=uuid4(),
+            intent=intent,
+            status=OrderStatus.SUBMITTED,
+        )
+
+
 class TradingEngine:
-    def __init__(self, risk_validator: RiskValidator | None = None):
+    def __init__(self, risk_validator: RiskValidator | None = None, executor: ExchangeExecutionAdapter | None = None):
         self.risk_validator = risk_validator or RiskValidator()
+        self.executor = executor or ExchangeExecutionAdapter()
 
     def create_execution_plan(
         self,
@@ -70,8 +95,11 @@ class TradingEngine:
     ) -> dict:
         decision = self.risk_validator.validate(config, signal.confidence, available_balance, open_trades)
         intent = None
+        order = None
+
         if decision.approved and signal.signal != Signal.HOLD:
             intent = OrderIntent(signal.symbol, signal.signal, config.order_amount)
+            order = self.executor.submit(intent)
 
         return {
             "bot_id": bot_id,
@@ -81,4 +109,5 @@ class TradingEngine:
             "risk": decision.risk,
             "reason": decision.reason,
             "order_intent": intent,
+            "execution_order": order,
         }
