@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
 from uuid import UUID
@@ -31,6 +32,13 @@ class ExecutionDecision(BaseModel):
     reason: str
 
 
+@dataclass(frozen=True)
+class OrderIntent:
+    symbol: str
+    side: Signal
+    amount: Decimal
+
+
 class RiskValidator:
     def validate(
         self,
@@ -40,31 +48,12 @@ class RiskValidator:
         open_trades: int,
     ) -> ExecutionDecision:
         if confidence < config.confidence_threshold:
-            return ExecutionDecision(
-                approved=False,
-                risk=RiskDecision.REJECTED,
-                reason="Prediction confidence below configured threshold",
-            )
-
+            return ExecutionDecision(False, RiskDecision.REJECTED, "Prediction confidence below configured threshold")
         if available_balance < config.order_amount:
-            return ExecutionDecision(
-                approved=False,
-                risk=RiskDecision.REJECTED,
-                reason="Insufficient available balance",
-            )
-
+            return ExecutionDecision(False, RiskDecision.REJECTED, "Insufficient available balance")
         if open_trades >= config.max_open_trades:
-            return ExecutionDecision(
-                approved=False,
-                risk=RiskDecision.REJECTED,
-                reason="Maximum open trades reached",
-            )
-
-        return ExecutionDecision(
-            approved=True,
-            risk=RiskDecision.APPROVED,
-            reason="Risk checks passed",
-        )
+            return ExecutionDecision(False, RiskDecision.REJECTED, "Maximum open trades reached")
+        return ExecutionDecision(True, RiskDecision.APPROVED, "Risk checks passed")
 
 
 class TradingEngine:
@@ -79,12 +68,10 @@ class TradingEngine:
         available_balance: Decimal,
         open_trades: int,
     ) -> dict:
-        decision = self.risk_validator.validate(
-            config,
-            signal.confidence,
-            available_balance,
-            open_trades,
-        )
+        decision = self.risk_validator.validate(config, signal.confidence, available_balance, open_trades)
+        intent = None
+        if decision.approved and signal.signal != Signal.HOLD:
+            intent = OrderIntent(signal.symbol, signal.signal, config.order_amount)
 
         return {
             "bot_id": bot_id,
@@ -93,4 +80,5 @@ class TradingEngine:
             "execute": decision.approved,
             "risk": decision.risk,
             "reason": decision.reason,
+            "order_intent": intent,
         }
