@@ -69,50 +69,64 @@ class PortfolioService:
 
     def reserve(self, user_id, portfolio_id, request):
         with self.repository.transaction() as c:
-            p = self.repository.owned(c, user_id, portfolio_id)
-            existing = c.execute("SELECT * FROM portfolio_orders WHERE portfolio_id=%s AND client_order_id=%s",
-                                 (portfolio_id, request.client_order_id)).fetchone()
-            if existing:
-                if any(existing[key] != getattr(request, key) for key in (
-                        "symbol", "side", "quantity", "simulation_price", "fee")):
-                    raise PortfolioError("Client order ID was already used with different details", 409)
-                return existing
-            holdings, pending = self.repository.state(c, portfolio_id)
-            result = validate_order(p, holdings, pending, request, RiskSettings.model_validate(p["risk_settings"]))
-            return c.execute("""INSERT INTO portfolio_orders
-                (order_id,portfolio_id,client_order_id,symbol,side,quantity,simulation_price,fee,notional,stop_loss_price,take_profit_price)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
-                (uuid4(), portfolio_id, request.client_order_id, request.symbol, request.side,
-                 request.quantity, request.simulation_price, request.fee, result["notional"],
-                 result["stop_loss_price"], result["take_profit_price"])).fetchone()
+            return self.reserve_in_transaction(c, user_id, portfolio_id, request)
+
+    def reserve_in_transaction(self, c, user_id, portfolio_id, request, managed=False):
+        p = self.repository.owned(c, user_id, portfolio_id)
+        existing = c.execute("SELECT * FROM portfolio_orders WHERE portfolio_id=%s AND client_order_id=%s",
+                             (portfolio_id, request.client_order_id)).fetchone()
+        if existing:
+            if any(existing[key] != getattr(request, key) for key in (
+                    "symbol", "side", "quantity", "simulation_price", "fee")):
+                raise PortfolioError("Client order ID was already used with different details", 409)
+            return existing
+        holdings, pending = self.repository.state(c, portfolio_id)
+        if request.side == 'sell' and not managed and c.execute("SELECT to_regclass('trading_positions')").fetchone()['to_regclass']:
+            protected = c.execute("""SELECT COALESCE(sum(tp.quantity),0) AS quantity FROM trading_positions tp
+                JOIN trading_bots b USING(bot_id) WHERE b.portfolio_id=%s AND b.symbol=%s""",
+                (portfolio_id, request.symbol + '/USD')).fetchone()['quantity']
+            held = next((h['quantity'] for h in holdings if h['symbol'] == request.symbol), ZERO)
+            _, reserved = reservations(pending)
+            if protected > 0 and request.quantity > held - protected - reserved.get(request.symbol, ZERO):
+                raise PortfolioError('Bot-managed units must be closed through the bot', 409)
+        result = validate_order(p, holdings, pending, request, RiskSettings.model_validate(p["risk_settings"]))
+        return c.execute("""INSERT INTO portfolio_orders
+            (order_id,portfolio_id,client_order_id,symbol,side,quantity,simulation_price,fee,notional,stop_loss_price,take_profit_price)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
+            (uuid4(), portfolio_id, request.client_order_id, request.symbol, request.side,
+             request.quantity, request.simulation_price, request.fee, result["notional"],
+             result["stop_loss_price"], result["take_profit_price"])).fetchone()
 
     def complete(self, user_id, portfolio_id, order_id, action):
         with self.repository.transaction() as c:
-            self.repository.owned(c, user_id, portfolio_id)
-            order = c.execute("SELECT * FROM portfolio_orders WHERE portfolio_id=%s AND order_id=%s",
-                              (portfolio_id, order_id)).fetchone()
-            if order is None:
-                raise PortfolioError("Order not found", 404)
-            target = "filled" if action == "fill" else "cancelled"
-            if order["status"] == target:
-                return order
-            if order["status"] != "pending":
-                raise PortfolioError("Order is already " + order["status"], 409)
-            if action == "fill":
-                c.execute("""INSERT INTO portfolio_holdings (portfolio_id,symbol) VALUES (%s,%s)
-                    ON CONFLICT DO NOTHING""", (portfolio_id, order["symbol"]))
-                holding = c.execute("SELECT * FROM portfolio_holdings WHERE portfolio_id=%s AND symbol=%s",
-                                    (portfolio_id, order["symbol"])).fetchone()
-                updated, cash_change, realized = apply_fill(holding, order["side"], order["quantity"], order["simulation_price"], order["fee"])
-                c.execute("""UPDATE portfolio_holdings SET quantity=%s,cost_basis=%s,realized_pnl=%s
-                    WHERE portfolio_id=%s AND symbol=%s""",
-                    (updated["quantity"], updated["cost_basis"], updated["realized_pnl"], portfolio_id, order["symbol"]))
-                c.execute("UPDATE portfolios SET cash_balance=cash_balance+%s WHERE portfolio_id=%s", (cash_change, portfolio_id))
-                c.execute("""INSERT INTO portfolio_trades (portfolio_id,order_id,symbol,side,quantity,price,fee,realized_pnl)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""", (portfolio_id, order_id, order["symbol"], order["side"],
-                    order["quantity"], order["simulation_price"], order["fee"], realized))
-            return c.execute("UPDATE portfolio_orders SET status=%s,completed_at=now() WHERE order_id=%s RETURNING *",
-                             (target, order_id)).fetchone()
+            return self.complete_in_transaction(c, user_id, portfolio_id, order_id, action)
+
+    def complete_in_transaction(self, c, user_id, portfolio_id, order_id, action):
+        self.repository.owned(c, user_id, portfolio_id)
+        order = c.execute("SELECT * FROM portfolio_orders WHERE portfolio_id=%s AND order_id=%s",
+                          (portfolio_id, order_id)).fetchone()
+        if order is None:
+            raise PortfolioError("Order not found", 404)
+        target = "filled" if action == "fill" else "cancelled"
+        if order["status"] == target:
+            return order
+        if order["status"] != "pending":
+            raise PortfolioError("Order is already " + order["status"], 409)
+        if action == "fill":
+            c.execute("""INSERT INTO portfolio_holdings (portfolio_id,symbol) VALUES (%s,%s)
+                ON CONFLICT DO NOTHING""", (portfolio_id, order["symbol"]))
+            holding = c.execute("SELECT * FROM portfolio_holdings WHERE portfolio_id=%s AND symbol=%s",
+                                (portfolio_id, order["symbol"])).fetchone()
+            updated, cash_change, realized = apply_fill(holding, order["side"], order["quantity"], order["simulation_price"], order["fee"])
+            c.execute("""UPDATE portfolio_holdings SET quantity=%s,cost_basis=%s,realized_pnl=%s
+                WHERE portfolio_id=%s AND symbol=%s""",
+                (updated["quantity"], updated["cost_basis"], updated["realized_pnl"], portfolio_id, order["symbol"]))
+            c.execute("UPDATE portfolios SET cash_balance=cash_balance+%s WHERE portfolio_id=%s", (cash_change, portfolio_id))
+            c.execute("""INSERT INTO portfolio_trades (portfolio_id,order_id,symbol,side,quantity,price,fee,realized_pnl)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""", (portfolio_id, order_id, order["symbol"], order["side"],
+                order["quantity"], order["simulation_price"], order["fee"], realized))
+        return c.execute("UPDATE portfolio_orders SET status=%s,completed_at=now() WHERE order_id=%s RETURNING *",
+                         (target, order_id)).fetchone()
 
     def history(self, user_id, portfolio_id, limit, before):
         with self.repository.transaction() as c:

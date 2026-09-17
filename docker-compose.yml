@@ -99,6 +99,27 @@ services:
       redis:
         condition: service_started
 
+  trading-worker:
+    build:
+      context: ./backend
+    command: ["python", "-m", "app.trading.worker"]
+    environment:
+      <<: *backend-environment
+      TF_NUM_INTRAOP_THREADS: 1
+      TF_NUM_INTEROP_THREADS: 1
+      OMP_NUM_THREADS: 1
+    volumes:
+      - model_artifacts:/app/model_artifacts:ro
+    restart: unless-stopped
+    stop_grace_period: 60s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
+      redis:
+        condition: service_started
+
   prediction-trainer:
     profiles: ["training"]
     build:
