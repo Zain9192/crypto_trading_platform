@@ -32,6 +32,7 @@ class ExchangeRepository:
 
     def replace_credentials(self, user_id, connection_id, encrypted):
         with psycopg.connect(self.dsn, row_factory=dict_row) as c:
+            self.require_idle(c, user_id, connection_id)
             row = c.execute(f'''UPDATE exchange_connections SET credentials_ciphertext=%s,updated_at=now()
                 WHERE user_id=%s AND connection_id=%s RETURNING {PUBLIC_COLUMNS}''', (encrypted, user_id, connection_id)).fetchone()
         if row is None:
@@ -39,8 +40,29 @@ class ExchangeRepository:
         return row
 
     def delete(self, user_id, connection_id):
-        with psycopg.connect(self.dsn) as c:
+        with psycopg.connect(self.dsn, row_factory=dict_row) as c:
+            self.require_idle(c, user_id, connection_id, deleting=True)
             row = c.execute('DELETE FROM exchange_connections WHERE user_id=%s AND connection_id=%s RETURNING connection_id', (user_id, connection_id)).fetchone()
         if row is None:
             raise ExchangeFailure('Exchange connection not found', 404)
         return {'message': 'Connection removed locally. Revoke its key at the exchange if no longer needed.'}
+
+    @staticmethod
+    def require_idle(c, user_id, connection_id, deleting=False):
+        if not c.execute("SELECT to_regclass('sandbox_orders') AS present").fetchone()['present']:
+            return
+        if not c.execute('SELECT pg_try_advisory_xact_lock(hashtextextended(%s,0)) AS acquired', (str(connection_id),)).fetchone()['acquired']:
+            raise ExchangeFailure('Sandbox worker is using this connection; retry after stopping its bots', 409)
+        owned = c.execute('SELECT 1 FROM exchange_connections WHERE connection_id=%s AND user_id=%s FOR UPDATE', (connection_id, user_id)).fetchone()
+        if owned is None:
+            raise ExchangeFailure('Exchange connection not found', 404)
+        linked = c.execute('SELECT 1 FROM trading_bots WHERE connection_id=%s LIMIT 1', (connection_id,)).fetchone()
+        if deleting and linked:
+            raise ExchangeFailure('Connection has linked sandbox bots and cannot be removed', 409)
+        active = c.execute("""SELECT 1 FROM trading_bots b WHERE connection_id=%s AND
+            (state IN ('running','stopping') OR close_requested OR
+             EXISTS (SELECT 1 FROM sandbox_positions p WHERE p.bot_id=b.bot_id AND p.quantity>0) OR
+             EXISTS (SELECT 1 FROM sandbox_orders o WHERE o.bot_id=b.bot_id AND o.status IN ('submitting','unknown','open','partially_filled')))
+            LIMIT 1""", (connection_id,)).fetchone()
+        if active:
+            raise ExchangeFailure('Stop bots, reconcile orders and close sandbox positions before replacing credentials', 409)

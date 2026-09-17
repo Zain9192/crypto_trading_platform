@@ -67,6 +67,8 @@ def history(bot_id: UUID, before: int | None = Query(None, ge=1), limit: int = Q
 def close_position(bot_id: UUID, user=Depends(get_current_user), service=Depends(get_service), market=Depends(get_market_service)):
     def close():
         row = service.repository.get(user['user_id'], bot_id)
+        if row['connection_id'] is not None:
+            return service.sandbox_action(user['user_id'], bot_id, 'close')
         try:
             asset = market.get_asset(row['symbol'].split('/')[0])
         except Exception:
@@ -75,3 +77,9 @@ def close_position(bot_id: UUID, user=Depends(get_current_user), service=Depends
             raise PortfolioError('Market quote unavailable', 503)
         return TradingEngine(service.repository).tick(user['user_id'], bot_id, row['revision'], asset, close=True)
     return respond(close)
+
+
+@router.post('/{bot_id}/sandbox/{action}')
+def sandbox_control(bot_id: UUID, action: Literal['close', 'cancel', 'reconcile'], order_id: UUID | None = None,
+                    user=Depends(get_current_user), service=Depends(get_service)):
+    return respond(service.sandbox_action, user['user_id'], bot_id, action, order_id)

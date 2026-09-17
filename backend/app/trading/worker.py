@@ -10,6 +10,7 @@ from app.prediction.dependencies import get_prediction_service
 from app.trading.engine import TradingEngine
 from app.trading.execution import prediction_signal
 from app.trading.repository import TradingRepository
+from app.trading.sandbox import SandboxEngine
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ def main():
     market = get_market_service()
     prediction = get_prediction_service(market)
     engine = TradingEngine(repository)
+    sandbox = SandboxEngine(repository, get_settings(), prediction)
     stopped = threading.Event()
     for kind in (signal.SIGINT, signal.SIGTERM):
         signal.signal(kind, lambda *_: stopped.set())
@@ -29,11 +31,17 @@ def main():
                 c.execute('''INSERT INTO trading_worker_heartbeat(worker_id) VALUES (%s)
                     ON CONFLICT(worker_id) DO UPDATE SET seen_at=now()''', (worker_id,))
                 c.execute("DELETE FROM trading_worker_heartbeat WHERE seen_at < now()-interval '1 day'")
-                rows = c.execute("SELECT * FROM trading_bots WHERE state='running' AND next_run_at<=now() ORDER BY next_run_at LIMIT 20").fetchall()
+                rows = c.execute("""SELECT * FROM trading_bots b WHERE next_run_at<=now() AND
+                    (state IN ('running','stopping') OR close_requested OR EXISTS
+                     (SELECT 1 FROM sandbox_orders o WHERE o.bot_id=b.bot_id AND o.status IN ('submitting','unknown','open','partially_filled')))
+                    ORDER BY next_run_at LIMIT 20""").fetchall()
             for row in rows:
                 if stopped.is_set():
                     break
                 try:
+                    if row['connection_id'] is not None:
+                        sandbox.run(row)
+                        continue
                     config = repository.snapshot(row).config
                     asset = market.get_asset(config.symbol.split('/')[0])
                     if asset is None:
@@ -55,7 +63,8 @@ def main():
                 except Exception:
                     # Provider/DB exception text can contain sensitive connection details.
                     logger.warning('Bot tick failed: %s', row['bot_id'])
-                    engine.failure(row['user_id'], row['bot_id'], row['revision'],
+                    failure = sandbox.failure if row['connection_id'] else engine.failure
+                    failure(row['user_id'], row['bot_id'], row['revision'],
                                    'Execution unavailable; check market data, model and storage. Reset after five failures.')
         except Exception:
             logger.warning('Trading worker storage unavailable; retrying')
