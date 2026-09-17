@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -45,6 +46,13 @@ class Settings(BaseSettings):
     market_http_timeout_seconds: float = 10.0
 
     exchange_encryption_key: SecretStr = SecretStr("")
+    notification_email_provider: Literal['disabled', 'smtp', 'sendgrid'] = 'disabled'
+    notification_email_from: str = ''
+    notification_smtp_host: str = ''
+    notification_smtp_port: int = Field(default=587, ge=1, le=65535)
+    notification_smtp_username: str = ''
+    notification_smtp_password: SecretStr = SecretStr('')
+    notification_sendgrid_key: SecretStr = SecretStr('')
     prediction_artifact_dir: str = "model_artifacts"
 
     model_config = SettingsConfigDict(

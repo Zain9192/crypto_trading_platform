@@ -5,13 +5,14 @@ import type { Tokens } from '../api/portfolio'
 import PortfolioDashboard from './PortfolioDashboard'
 import ExchangeDashboard from './ExchangeDashboard'
 import TradingDashboard from './TradingDashboard'
+import NotificationsDashboard from './NotificationsDashboard'
 
 export default function PortfolioAccess() {
   // Tokens live only in memory; reloading requires sign-in. No browser storage.
   const session = useRef<Tokens | null>(null)
   const refreshing = useRef<Promise<Tokens> | null>(null)
   const [signedIn, setSignedIn] = useState(false)
-  const [section, setSection] = useState<'portfolio' | 'exchanges' | 'bots'>('portfolio')
+  const [section, setSection] = useState<'portfolio' | 'exchanges' | 'bots' | 'notifications'>('portfolio')
   const [mode, setMode] = useState<'login' | 'register' | 'verify'>('login')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -78,8 +79,9 @@ export default function PortfolioAccess() {
       <button aria-pressed={section === 'portfolio'} onClick={() => setSection('portfolio')}>Paper portfolio</button>
       <button aria-pressed={section === 'exchanges'} onClick={() => setSection('exchanges')}>Exchange connections</button>
       <button aria-pressed={section === 'bots'} onClick={() => setSection('bots')}>Trading bots</button>
+      <button aria-pressed={section === 'notifications'} onClick={() => setSection('notifications')}>Notifications & alerts</button>
     </nav>
-    {section === 'portfolio' ? <PortfolioDashboard request={request} /> : section === 'exchanges' ? <ExchangeDashboard request={request} /> : <TradingDashboard request={request} />}
+    {section === 'portfolio' ? <PortfolioDashboard request={request} /> : section === 'exchanges' ? <ExchangeDashboard request={request} /> : section === 'bots' ? <TradingDashboard request={request} /> : <NotificationsDashboard request={request} getToken={async () => { await request('/auth/me'); if (!session.current) throw new Error('Signed out'); return session.current.access_token }} />}
   </section>
   return <section className="portfolio-shell market-panel auth-panel">
     <p className="eyebrow">Portfolio & risk</p><h2>{mode === 'login' ? 'Sign in to your portfolio' : mode === 'register' ? 'Create an account' : 'Verify your email'}</h2>

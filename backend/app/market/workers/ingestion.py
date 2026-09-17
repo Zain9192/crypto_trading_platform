@@ -9,6 +9,7 @@ from app.core.config import Settings, get_settings
 from app.market.dependencies import get_market_service
 from app.market.schemas import SUPPORTED_INTERVALS
 from app.market.service import MarketService
+from app.notifications.alerts import PriceAlerts
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,11 @@ class MarketIngestionWorker:
     async def refresh_prices(self, stop: asyncio.Event) -> None:
         while not stop.is_set():
             try:
-                await asyncio.to_thread(self.service.get_top_assets, 50, force_refresh=True)
+                assets, _ = await asyncio.to_thread(self.service.get_top_assets, 50, force_refresh=True)
+                try:
+                    await asyncio.to_thread(PriceAlerts(self.settings.postgres_dsn).evaluate, assets)
+                except Exception:
+                    logger.exception("Price alert evaluation failed; retry next cycle")
             except Exception:
                 logger.exception("Price refresh failed; retry next cycle")
             await self.pause(stop, self.settings.market_refresh_seconds)

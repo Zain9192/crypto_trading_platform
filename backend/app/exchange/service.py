@@ -1,4 +1,5 @@
 import base64
+import logging
 from contextlib import contextmanager
 from uuid import uuid4
 from app.exchange.adapters import ExchangeFailure, make_adapter
@@ -66,6 +67,13 @@ class ExchangeService:
             credentials = configured_cipher(self.settings).decrypt(row['credentials_ciphertext'], **self.context(row))
         except ValueError:
             raise ExchangeFailure('Stored exchange credentials cannot be decrypted; contact the operator', 503) from None
-        with self.transport(ExchangeName(row['exchange']), credentials, row['sandbox']) as adapter:
-            result = getattr(adapter, operation)(*args)
+        try:
+            with self.transport(ExchangeName(row['exchange']), credentials, row['sandbox']) as adapter:
+                result = getattr(adapter, operation)(*args)
+        except ExchangeFailure:
+            try:
+                self.repository.notify_failure(user_id, connection_id)
+            except Exception:
+                logging.getLogger(__name__).warning('Could not persist exchange failure notification')
+            raise
         return {'message': 'Connection verified. Read-only access is active.'} if operation == 'connect' else result

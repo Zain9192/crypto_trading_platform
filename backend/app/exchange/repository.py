@@ -66,3 +66,12 @@ class ExchangeRepository:
             LIMIT 1""", (connection_id,)).fetchone()
         if active:
             raise ExchangeFailure('Stop bots, reconcile orders and close sandbox positions before replacing credentials', 409)
+
+    def notify_failure(self, user_id, connection_id):
+        with psycopg.connect(self.dsn) as c:
+            c.execute('''INSERT INTO notifications(user_id,event_key,kind,payload)
+                SELECT user_id,'exchange-read:' || connection_id || ':' || date_trunc('hour',now())::text,
+                    'exchange_failure',jsonb_build_object('connection_id',connection_id,'symbol',exchange,
+                    'message','Exchange account request failed. Review the connection and credentials before retrying.')
+                FROM exchange_connections WHERE user_id=%s AND connection_id=%s
+                ON CONFLICT(user_id,event_key) DO NOTHING''', (user_id,connection_id))

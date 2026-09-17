@@ -61,6 +61,13 @@ services:
       LOGIN_LOCKOUT_MINUTES: ${LOGIN_LOCKOUT_MINUTES:-15}
       AUTH_DATA_ENCRYPTION_KEY: ${AUTH_DATA_ENCRYPTION_KEY:?AUTH_DATA_ENCRYPTION_KEY is required}
       EXCHANGE_ENCRYPTION_KEY: ${EXCHANGE_ENCRYPTION_KEY:-}
+      NOTIFICATION_EMAIL_PROVIDER: ${NOTIFICATION_EMAIL_PROVIDER:-disabled}
+      NOTIFICATION_EMAIL_FROM: ${NOTIFICATION_EMAIL_FROM:-}
+      NOTIFICATION_SMTP_HOST: ${NOTIFICATION_SMTP_HOST:-}
+      NOTIFICATION_SMTP_PORT: ${NOTIFICATION_SMTP_PORT:-587}
+      NOTIFICATION_SMTP_USERNAME: ${NOTIFICATION_SMTP_USERNAME:-}
+      NOTIFICATION_SMTP_PASSWORD: ${NOTIFICATION_SMTP_PASSWORD:-}
+      NOTIFICATION_SENDGRID_KEY: ${NOTIFICATION_SENDGRID_KEY:-}
       TOTP_ISSUER: ${TOTP_ISSUER:-AI Crypto Trading Platform}
       COINGECKO_BASE_URL: ${COINGECKO_BASE_URL:-https://api.coingecko.com/api/v3}
       BINANCE_MARKET_BASE_URL: ${BINANCE_MARKET_BASE_URL:-https://api.binance.com}
@@ -119,6 +126,18 @@ services:
         condition: service_started
       redis:
         condition: service_started
+
+  notification-worker:
+    build:
+      context: ./backend
+    command: ["python", "-m", "app.notifications.email_worker"]
+    environment:
+      <<: *backend-environment
+    restart: unless-stopped
+    stop_grace_period: 60s
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   prediction-trainer:
     profiles: ["training"]
