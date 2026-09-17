@@ -258,17 +258,25 @@ Implement:
 
 Critical rule: do not enable unrestricted live-money execution during normal development or automated tests.
 
-### Phase 8 — Alerts, Notifications, and Reports
+### Phase 8 — Alerts, Notifications, and Reports — implementation complete
 
-Implement:
-- Price alerts
-- Trade-executed notifications
-- Stop-loss/take-profit notifications
-- Bot/exchange failure notifications
-- In-app/WebSocket notifications
-- Email notifications using SendGrid/SMTP-compatible abstraction
-- CSV export
-- PDF report generation
+Delivered on `feature/alerts-notifications`:
+- [x] One-shot USD price alerts evaluated against fresh top-50 market quotes.
+- [x] Persistent paper-trade and sandbox-fill notifications.
+- [x] Stop-loss/take-profit notifications on recorded fills.
+- [x] Bot and exchange failure notifications with duplicate suppression.
+- [x] Authenticated in-app inbox and WebSocket updates, with polling recovery.
+- [x] Opt-in email notifications through SMTP STARTTLS or SendGrid, using a persistent outbox and bounded retries.
+- [x] CSV trading-activity export.
+- [x] PDF trading-activity reports.
+
+Deployment requires PostgreSQL migrations through `011_notification_email.sql` and the updated backend, frontend, market-ingestion, trading-worker, and notification-worker services. Existing PostgreSQL volumes need migrations applied explicitly; initialization scripts run automatically only on a fresh database.
+
+Email defaults to disabled. Configure `NOTIFICATION_EMAIL_PROVIDER`, `NOTIFICATION_EMAIL_FROM`, and either the SMTP settings (`NOTIFICATION_SMTP_HOST`, `NOTIFICATION_SMTP_PORT`, `NOTIFICATION_SMTP_USERNAME`, `NOTIFICATION_SMTP_PASSWORD`) or `NOTIFICATION_SENDGRID_KEY`. Users opt in from the notification inbox and must have verified email addresses. Delivery retries up to five attempts; a provider acknowledgement failure can cause duplicate delivery. Actual provider delivery remains unverified without credentials.
+
+Reports are owner-scoped and cover up to 367 UTC calendar days and 5,000 fills per export. Paper USD and sandbox USDT remain separate; fees retain their recorded currency. Price alerts pause when an asset leaves the top-50 market list.
+
+Validation: frontend production build, API loading, migrations 001–011, and CSV/PDF generation succeeded locally. Existing GitHub Actions checks run on the feature branch. Dedicated Phase 8 test cases remain deferred to Phase 10 at the owner's request; implementation completion does not imply production or external-provider verification.
 
 ### Phase 9 — Admin
 
@@ -375,7 +383,7 @@ Automated tests must not depend on real exchange funds or unstable third-party A
 5. Portfolio and risk — complete; PR #9 merged
 6. Exchange integration
 7. Automated trading engine
-8. Alerts, notifications, reports
+8. Alerts, notifications, reports — implementation complete; external email verification pending
 9. Admin
 10. QA/security hardening
 11. Deployment/operations
