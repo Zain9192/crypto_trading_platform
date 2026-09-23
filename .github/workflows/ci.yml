@@ -225,4 +225,4 @@ jobs:
         run: |
           mkdir -p tls
           openssl req -x509 -newkey rsa:2048 -nodes -keyout tls/privkey.pem -out tls/fullchain.pem -days 1 -subj /CN=example.com >/dev/null 2>&1
-          docker run --rm -e APP_DOMAIN=example.com -e 'NGINX_ENVSUBST_FILTER=^APP_DOMAIN$' -v "$PWD/deploy/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro" -v "$PWD/tls:/etc/nginx/tls:ro" nginx:1.27-alpine nginx -t
+          docker run --rm --add-host backend:127.0.0.1 --add-host frontend:127.0.0.1 -e APP_DOMAIN=example.com -e 'NGINX_ENVSUBST_FILTER=^APP_DOMAIN$' -v "$PWD/deploy/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro" -v "$PWD/tls:/etc/nginx/tls:ro" nginx:1.27-alpine nginx -t
