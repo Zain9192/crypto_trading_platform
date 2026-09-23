@@ -20,6 +20,9 @@ class TradingRepository(PostgresPortfolioRepository):
         return row
 
     def locked(self, c, user_id, bot_id):
+        owner = c.execute('SELECT is_active FROM users WHERE user_id=%s FOR SHARE', (user_id,)).fetchone()
+        if not owner or not owner['is_active']:
+            raise PortfolioError('User account is inactive', 403)
         row = self.find(c, user_id, bot_id)
         # Paper writes lock the portfolio; sandbox writes lock the exchange account first.
         portfolio = (self.owned(c, user_id, row['portfolio_id']) if row['portfolio_id'] is not None
