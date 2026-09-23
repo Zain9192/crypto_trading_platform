@@ -1,5 +1,6 @@
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import quote
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -8,6 +9,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "AI Crypto Trading Platform"
     app_env: str = "development"
+    rate_limit_enabled: bool = True
+    api_rate_limit_per_minute: int = Field(default=600,ge=1)
+    auth_rate_limit_per_minute: int = Field(default=20,ge=1)
+    request_max_bytes: int = Field(default=1048576,ge=1024)
+    trusted_proxy_cidrs: str = ''
+    cors_origins: str = 'http://localhost:5173' 
     api_v1_prefix: str = "/api/v1"
 
     postgres_db: str = "crypto_trading"
@@ -19,13 +26,17 @@ class Settings(BaseSettings):
     mongo_db: str = "crypto_market"
     mongo_host: str = "localhost"
     mongo_port: int = 27017
+    mongo_user: str = ""
+    mongo_password: str = ""
 
     redis_host: str = "localhost"
     redis_port: int = 6379
     redis_db: int = 0
+    redis_password: str = ""
+    sentry_dsn: SecretStr = SecretStr("")
 
     jwt_secret_key: str = ""
-    jwt_algorithm: str = "HS256"
+    jwt_algorithm: Literal["HS256", "HS384", "HS512"] = "HS256"
     jwt_access_token_minutes: int = 1440
     jwt_refresh_token_minutes: int = 10080
     email_verification_token_minutes: int = 1440
@@ -64,13 +75,18 @@ class Settings(BaseSettings):
     @property
     def postgres_dsn(self) -> str:
         return (
-            f"postgresql://{self.postgres_user}:{self.postgres_password}"
+            f"postgresql://{quote(self.postgres_user, safe='')}:{quote(self.postgres_password, safe='')}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
     @property
     def mongo_uri(self) -> str:
-        return f"mongodb://{self.mongo_host}:{self.mongo_port}"
+        credentials = (
+            f"{quote(self.mongo_user, safe='')}:{quote(self.mongo_password, safe='')}@"
+            if self.mongo_user and self.mongo_password else ""
+        )
+        suffix = "/?authSource=admin" if credentials else ""
+        return f"mongodb://{credentials}{self.mongo_host}:{self.mongo_port}{suffix}"
 
     def validate_auth_secrets(self) -> None:
         if len(self.jwt_secret_key) < 32:

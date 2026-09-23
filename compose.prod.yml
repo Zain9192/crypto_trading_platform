@@ -1,0 +1,203 @@
+name: crypto-platform
+
+x-backend-environment: &backend-environment
+  APP_ENV: production
+  POSTGRES_HOST: postgres
+  POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB}
+  POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+  MONGO_HOST: mongodb
+  MONGO_DB: ${MONGO_DB:?Set MONGO_DB}
+  MONGO_USER: ${MONGO_USER:?Set MONGO_USER}
+  MONGO_PASSWORD: ${MONGO_PASSWORD:?Set MONGO_PASSWORD}
+  REDIS_HOST: redis
+  REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY}
+  AUTH_DATA_ENCRYPTION_KEY: ${AUTH_DATA_ENCRYPTION_KEY:?Set AUTH_DATA_ENCRYPTION_KEY}
+  EXCHANGE_ENCRYPTION_KEY: ${EXCHANGE_ENCRYPTION_KEY:?Set EXCHANGE_ENCRYPTION_KEY}
+  TRUSTED_PROXY_CIDRS: ${GATEWAY_IP:-172.30.91.10}/32
+  CORS_ORIGINS: https://${APP_DOMAIN:?Set APP_DOMAIN}
+  PREDICTION_ARTIFACT_DIR: /app/model_artifacts
+  SENTRY_DSN: ${SENTRY_DSN:-}
+  NOTIFICATION_EMAIL_PROVIDER: ${NOTIFICATION_EMAIL_PROVIDER:-disabled}
+  NOTIFICATION_EMAIL_FROM: ${NOTIFICATION_EMAIL_FROM:-}
+  NOTIFICATION_SMTP_HOST: ${NOTIFICATION_SMTP_HOST:-}
+  NOTIFICATION_SMTP_PORT: ${NOTIFICATION_SMTP_PORT:-587}
+  NOTIFICATION_SMTP_USERNAME: ${NOTIFICATION_SMTP_USERNAME:-}
+  NOTIFICATION_SMTP_PASSWORD: ${NOTIFICATION_SMTP_PASSWORD:-}
+  NOTIFICATION_SENDGRID_KEY: ${NOTIFICATION_SENDGRID_KEY:-}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mongodb:
+    image: mongo:7
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:?Set MONGO_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?Set MONGO_PASSWORD}
+    volumes:
+      - mongo_data:/data/db
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet -u \"$$MONGO_INITDB_ROOT_USERNAME\" -p \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval 'db.adminCommand({ping:1}).ok' | grep -q 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    volumes:
+      - redis_data:/data
+    networks: [data]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE}
+    restart: "no"
+    command: ["python", "-m", "app.ops.migrate"]
+    environment: *backend-environment
+    networks: [data]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  backend:
+    image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE}
+    restart: unless-stopped
+    environment: *backend-environment
+    volumes:
+      - model_artifacts:/app/model_artifacts:ro
+    networks: [data, edge]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  market-ingestion:
+    image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE}
+    command: ["python", "-m", "app.market.workers.ingestion"]
+    restart: unless-stopped
+    environment: *backend-environment
+    networks: [data]
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  trading-worker:
+    image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE}
+    command: ["python", "-m", "app.trading.worker"]
+    restart: unless-stopped
+    stop_grace_period: 60s
+    environment: *backend-environment
+    volumes:
+      - model_artifacts:/app/model_artifacts:ro
+    networks: [data]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  notification-worker:
+    image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE}
+    command: ["python", "-m", "app.notifications.email_worker"]
+    restart: unless-stopped
+    environment: *backend-environment
+    networks: [data]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  prediction-trainer:
+    profiles: [training]
+    image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE}
+    command: ["python", "-m", "app.prediction.train", "--help"]
+    restart: "no"
+    environment: *backend-environment
+    volumes:
+      - model_artifacts:/app/model_artifacts
+    networks: [data]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      mongodb:
+        condition: service_healthy
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?Set FRONTEND_IMAGE}
+    restart: unless-stopped
+    networks: [edge]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  gateway:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN}
+      NGINX_ENVSUBST_FILTER: ^APP_DOMAIN$$
+    volumes:
+      - ./deploy/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./tls:/etc/nginx/tls:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      edge:
+        ipv4_address: ${GATEWAY_IP:-172.30.91.10}
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/gateway-health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  edge:
+    ipam:
+      config:
+        - subnet: ${EDGE_SUBNET:-172.30.91.0/24}
+  data: {}
+
+volumes:
+  postgres_data: {}
+  mongo_data: {}
+  redis_data: {}
+  model_artifacts: {}

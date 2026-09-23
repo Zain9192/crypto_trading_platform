@@ -7,6 +7,7 @@ from app.market.schemas import MarketInterval
 
 
 class Forecast(BaseModel):
+    drift: dict = Field(default_factory=lambda: {"status": "baseline_unavailable", "features": {}})
     symbol: str
     interval: MarketInterval
     quote_asset: str

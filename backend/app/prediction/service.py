@@ -8,6 +8,7 @@ from app.market.schemas import MarketInterval
 from app.prediction.artifacts import ArtifactStore
 from app.prediction.data import DataError, FEATURES, FEATURE_VERSION, candle_end, feature_frame
 from app.prediction.registry import Registry
+from app.prediction.drift import assess
 from app.prediction.schemas import Forecast, RankedForecast, RankingResponse
 
 
@@ -62,6 +63,7 @@ class PredictionService:
             direction="up" if up >= 0.5 else "down", up_probability=up, confidence=max(up, 1 - up),
             expected_return=expected, estimated_risk=float(frame.return_1.tail(20).std()),
             validation_error_p95=metadata["validation_absolute_error_p95"],
+            drift=assess(frame[FEATURES].to_numpy(dtype=float)[-120:], FEATURES, metadata.get("drift_baseline")),
         )
         self.registry.record_prediction(result.model_dump(mode="json"))
         return result

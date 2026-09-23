@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import bcrypt
 import jwt
@@ -33,7 +33,7 @@ def hash_one_time_token(token: str) -> str:
     return sha256(token.encode("utf-8")).hexdigest()
 
 
-def create_access_token(user_id: int, role: str, settings: Settings) -> tuple[str, datetime]:
+def create_access_token(user_id: int, role: str, settings: Settings, session_id: str | None = None) -> tuple[str, datetime]:
     settings.validate_auth_secrets()
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_access_token_minutes)
     payload = {
@@ -43,6 +43,8 @@ def create_access_token(user_id: int, role: str, settings: Settings) -> tuple[st
         "iat": datetime.now(timezone.utc),
         "exp": expires_at,
     }
+    if session_id is not None:
+        payload["sid"] = session_id
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm), expires_at
 
 
@@ -64,13 +66,22 @@ def create_refresh_token(user_id: int, settings: Settings) -> tuple[str, str, da
 def decode_token(token: str, expected_type: str, settings: Settings) -> dict[str, object]:
     settings.validate_auth_secrets()
     try:
-        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm], options={"require": ["exp", "iat", "sub", "type"]})
     except jwt.PyJWTError as exc:
         raise TokenError("Invalid or expired token") from exc
     if payload.get("type") != expected_type:
         raise TokenError("Invalid token type")
-    if not payload.get("sub"):
-        raise TokenError("Token subject is missing")
+    subject = payload.get('sub')
+    if not isinstance(subject, str) or not subject.isdecimal() or not 0 < int(subject) <= 9223372036854775807:
+        raise TokenError('Invalid token subject')
+    for field in ('jti', 'sid'):
+        if field in payload:
+            try:
+                UUID(str(payload[field]))
+            except (ValueError, TypeError):
+                raise TokenError('Invalid token identifier') from None
+    if expected_type == 'refresh' and 'jti' not in payload:
+        raise TokenError('Refresh token identifier is missing')
     return payload
 
 

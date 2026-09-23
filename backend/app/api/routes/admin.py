@@ -98,10 +98,12 @@ def check_model(model_id: int = Path(ge=1,le=9223372036854775807),repository=Dep
         raise HTTPException(404,'Model not found')
     if not model['is_active'] or not model['symbol'] or not model['timeframe']:
         raise HTTPException(409,'Only an active prediction model can be checked')
+    drift=None
     try:
         forecast=service.predict(model['symbol'],model['timeframe'])
+        drift=forecast.drift
         state='healthy' if forecast.model_version==model['model_version'] else 'model_changed'
     except Exception:
         state='unavailable'
-    return {'model_id':model_id,'status':state,'observed_at':datetime.now(timezone.utc),
+    return {'model_id':model_id,'status':state,'drift':drift,'observed_at':datetime.now(timezone.utc),
             'scope':'Runs and records a forecast using the active model, including artifact and candle validation.'}

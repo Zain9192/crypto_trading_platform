@@ -1,5 +1,8 @@
 name: CI
 
+permissions:
+  contents: read
+
 on:
   push:
     branches:
@@ -24,11 +27,19 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U prediction_test -d prediction_test"
           --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     defaults:
       run:
         working-directory: backend
     env:
       PREDICTION_TEST_DSN: postgresql://prediction_test:prediction_test@localhost:5432/prediction_test
+      REDIS_TEST_URL: redis://localhost:6379/15
       TF_NUM_INTRAOP_THREADS: 1
       TF_NUM_INTEROP_THREADS: 1
       OMP_NUM_THREADS: 1
@@ -84,6 +95,82 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: prediction_test
+          POSTGRES_PASSWORD: prediction_test
+          POSTGRES_DB: prediction_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U prediction_test -d prediction_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      CI: 'true'
+      APP_ENV: test
+      POSTGRES_HOST: localhost
+      POSTGRES_USER: prediction_test
+      POSTGRES_PASSWORD: prediction_test
+      POSTGRES_DB: prediction_test
+      REDIS_HOST: localhost
+      JWT_SECRET_KEY: test-only-secret-key-that-is-at-least-32-characters-long
+      AUTH_DATA_ENCRYPTION_KEY: 65ujGo4u-rd5tR5SJEB0mvwCv4DZIuk6S7jgpQ8xOEc=
+      TF_NUM_INTRAOP_THREADS: '1'
+      TF_NUM_INTEROP_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: |
+          python -m pip install -r backend/requirements.txt
+          npm --prefix frontend install
+          (cd frontend && npx playwright install --with-deps chromium)
+      - name: Apply PostgreSQL migrations
+        run: |
+          python - <<'PYTHON'
+          import os
+          from pathlib import Path
+          import psycopg
+          with psycopg.connect('postgresql://prediction_test:prediction_test@localhost:5432/prediction_test') as connection:
+              for migration in sorted(Path('database/postgres').glob('*.sql')):
+                  connection.execute(migration.read_text())
+          PYTHON
+      - name: Run browser journey
+        run: npm --prefix frontend run test:e2e
+      - name: Measure 500 concurrent HTTP requests
+        run: |
+          (cd backend && python -m uvicorn qa.server:app --host 127.0.0.1 --port 8000 --no-proxy-headers) &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8000/api/v1/health >/dev/null; then break; fi
+            sleep 1
+          done
+          python backend/qa/load.py
+      - name: Save browser failure traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failure-traces
+          path: frontend/test-results/
+
   checkstyle:
     name: Checkstyle
     runs-on: ubuntu-latest
@@ -114,3 +201,31 @@ jobs:
 
       - name: Run Checkstyle
         run: ./scripts/run-checkstyle.sh
+
+  production-images:
+    name: Production images and release configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate production configuration
+        env:
+          BACKEND_IMAGE: ghcr.io/example/backend:qa
+          FRONTEND_IMAGE: ghcr.io/example/frontend:qa
+        run: |
+          docker compose --env-file deploy/production.env.example -f compose.prod.yml config --quiet
+          bash -n deploy/*.sh
+      - name: Build production backend
+        run: docker build -f backend/Dockerfile.prod -t crypto-backend:qa .
+      - name: Build production frontend
+        run: docker build -f frontend/Dockerfile -t crypto-frontend:qa frontend
+      - name: Check backend image imports and migration command
+        run: |
+          docker run --rm crypto-backend:qa python -m app.ops.migrate --help
+          docker run --rm crypto-backend:qa tar --version
+          docker run --rm mongo:7 mongodump --version
+          docker run --rm -e APP_ENV=test -e JWT_SECRET_KEY=test-only-secret-key-that-is-at-least-32-characters-long -e AUTH_DATA_ENCRYPTION_KEY=65ujGo4u-rd5tR5SJEB0mvwCv4DZIuk6S7jgpQ8xOEc= crypto-backend:qa python -c 'import app.main'
+      - name: Validate TLS gateway configuration
+        run: |
+          mkdir -p tls
+          openssl req -x509 -newkey rsa:2048 -nodes -keyout tls/privkey.pem -out tls/fullchain.pem -days 1 -subj /CN=example.com >/dev/null 2>&1
+          docker run --rm --add-host backend:127.0.0.1 --add-host frontend:127.0.0.1 -e APP_DOMAIN=example.com -e 'NGINX_ENVSUBST_FILTER=^APP_DOMAIN$' -v "$PWD/deploy/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro" -v "$PWD/tls:/etc/nginx/tls:ro" nginx:1.27-alpine nginx -t

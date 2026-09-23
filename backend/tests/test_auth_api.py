@@ -97,6 +97,13 @@ class FakeUserRepository:
     def get_refresh_token(self, jti: str) -> dict[str, Any] | None:
         return self._copy(self.refresh_tokens.get(jti))
 
+    def consume_refresh_token(self, jti: str, user_id: int) -> bool:
+        token = self.refresh_tokens.get(jti)
+        if not token or token['user_id'] != user_id or token['revoked_at'] is not None or token['expires_at'] <= datetime.now(timezone.utc):
+            return False
+        token['revoked_at'] = datetime.now(timezone.utc)
+        return True
+
     def revoke_refresh_token(self, jti: str) -> None:
         if jti in self.refresh_tokens and self.refresh_tokens[jti]["revoked_at"] is None:
             self.refresh_tokens[jti]["revoked_at"] = datetime.now(timezone.utc)
@@ -285,3 +292,33 @@ def test_invalid_or_reused_verification_token_is_rejected() -> None:
         json={"token": "x" * 40},
     )
     assert unknown.status_code == 400
+
+
+def test_logout_invalidates_access_session():
+    reset_repo()
+    registration=register_user()
+    verify_registered_user(registration)
+    tokens=login_user()
+    assert client.post('/api/v1/auth/logout',json={'refresh_token':tokens['refresh_token']}).status_code==200
+    assert client.get('/api/v1/auth/me',headers={'Authorization':f"Bearer {tokens['access_token']}"}).status_code==401
+
+
+def test_enabled_totp_cannot_be_reset_by_setup():
+    reset_repo()
+    registration=register_user()
+    verify_registered_user(registration)
+    tokens=login_user()
+    headers={'Authorization':f"Bearer {tokens['access_token']}"}
+    result=client.post('/api/v1/auth/2fa/setup',headers=headers)
+    secret=result.json()['secret']
+    assert client.post('/api/v1/auth/2fa/enable',headers=headers,json={'code':pyotp.TOTP(secret).now()}).status_code==200
+    assert client.post('/api/v1/auth/2fa/setup',headers=headers).status_code==409
+    assert repo.users[1]['totp_enabled'] is True
+
+
+def test_validation_never_echoes_credentials():
+    value='private-secret-'*20
+    response=client.post('/api/v1/auth/login',json={'email':'bad','password':value})
+    assert response.status_code==422
+    assert value not in response.text
+    assert 'input' not in response.json()['detail'][0]

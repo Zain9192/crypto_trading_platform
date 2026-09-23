@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from app.core.config import get_settings
+from app.core.observability import configure_error_tracking
 from app.market.dependencies import get_market_service
 from app.prediction.dependencies import get_prediction_service
 from app.trading.engine import TradingEngine
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def main():
+    configure_error_tracking(get_settings())
     repository = TradingRepository(get_settings().postgres_dsn)
     market = get_market_service()
     prediction = get_prediction_service(market)
