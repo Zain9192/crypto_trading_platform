@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily crypto platform database backup
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 UTC
+RandomizedDelaySec=1800
+Persistent=true
+Unit=crypto-platform-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -98,6 +98,8 @@ def deliver_one(settings, sender):
 
 def main():
     logging.basicConfig(level=logging.INFO)
+    from app.core.observability import configure_error_tracking
+    configure_error_tracking(get_settings())
     stop = threading.Event()
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, lambda *_: stop.set())

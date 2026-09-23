@@ -6,6 +6,7 @@ import logging
 import signal
 
 from app.core.config import Settings, get_settings
+from app.core.observability import configure_error_tracking
 from app.market.dependencies import get_market_service
 from app.market.schemas import SUPPORTED_INTERVALS
 from app.market.service import MarketService
@@ -75,6 +76,7 @@ class MarketIngestionWorker:
 
 async def main() -> None:
     logging.basicConfig(level=logging.INFO)
+    configure_error_tracking(get_settings())
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for signum in (signal.SIGINT, signal.SIGTERM):

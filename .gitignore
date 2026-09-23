@@ -45,3 +45,9 @@ model_artifacts/
 frontend/test-results/
 frontend/playwright-report/
 qa-results/
+tls/
+.release.env
+.release.previous.env
+.env.production
+restic.env
+.backup.lock

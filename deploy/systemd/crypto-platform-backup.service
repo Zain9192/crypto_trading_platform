@@ -1,0 +1,7 @@
+[Unit]
+Description=Offsite backup of crypto platform databases
+
+[Service]
+Type=oneshot
+EnvironmentFile=/opt/crypto-platform/restic.env
+ExecStart=/opt/crypto-platform/deploy/backup.sh

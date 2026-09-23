@@ -198,3 +198,31 @@ jobs:
 
       - name: Run Checkstyle
         run: ./scripts/run-checkstyle.sh
+
+  production-images:
+    name: Production images and release configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate production configuration
+        env:
+          BACKEND_IMAGE: ghcr.io/example/backend:qa
+          FRONTEND_IMAGE: ghcr.io/example/frontend:qa
+        run: |
+          docker compose --env-file deploy/production.env.example -f compose.prod.yml config --quiet
+          bash -n deploy/*.sh
+      - name: Build production backend
+        run: docker build -f backend/Dockerfile.prod -t crypto-backend:qa .
+      - name: Build production frontend
+        run: docker build -f frontend/Dockerfile -t crypto-frontend:qa frontend
+      - name: Check backend image imports and migration command
+        run: |
+          docker run --rm crypto-backend:qa python -m app.ops.migrate --help
+          docker run --rm crypto-backend:qa tar --version
+          docker run --rm mongo:7 mongodump --version
+          docker run --rm -e APP_ENV=test -e JWT_SECRET_KEY=test-only-secret-key-that-is-at-least-32-characters-long -e AUTH_DATA_ENCRYPTION_KEY=65ujGo4u-rd5tR5SJEB0mvwCv4DZIuk6S7jgpQ8xOEc= crypto-backend:qa python -c 'import app.main'
+      - name: Validate TLS gateway configuration
+        run: |
+          mkdir -p tls
+          openssl req -x509 -newkey rsa:2048 -nodes -keyout tls/privkey.pem -out tls/fullchain.pem -days 1 -subj /CN=example.com >/dev/null 2>&1
+          docker run --rm -e APP_DOMAIN=example.com -e 'NGINX_ENVSUBST_FILTER=^APP_DOMAIN$' -v "$PWD/deploy/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro" -v "$PWD/tls:/etc/nginx/tls:ro" nginx:1.27-alpine nginx -t

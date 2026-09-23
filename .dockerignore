@@ -1,0 +1,13 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+frontend
+docs
+tls
+model_artifacts
+**/__pycache__
+**/.pytest_cache
+backend/tests
+backend/qa
