@@ -1,5 +1,7 @@
 name: Production uptime
 
+permissions: {}
+
 on:
   schedule:
     - cron: '*/10 * * * *'
