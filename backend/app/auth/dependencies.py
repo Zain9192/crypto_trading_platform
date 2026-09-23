@@ -38,3 +38,13 @@ def get_current_user(
         return service.current_user(credentials.credentials)
     except (TokenError, AuthenticationError) as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+
+
+def get_admin_user(
+    user: Annotated[dict[str, Any], Depends(get_current_user)],
+) -> dict[str, Any]:
+    # The authenticated user comes from PostgreSQL on every request, so a role
+    # change takes effect without trusting a stale role claim in a JWT.
+    if user.get('role') != 'admin':
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Administrator access required')
+    return user
