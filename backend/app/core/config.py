@@ -8,6 +8,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "AI Crypto Trading Platform"
     app_env: str = "development"
+    rate_limit_enabled: bool = True
+    api_rate_limit_per_minute: int = Field(default=600,ge=1)
+    auth_rate_limit_per_minute: int = Field(default=20,ge=1)
+    request_max_bytes: int = Field(default=1048576,ge=1024)
+    trusted_proxy_cidrs: str = ''
+    cors_origins: str = 'http://localhost:5173' 
     api_v1_prefix: str = "/api/v1"
 
     postgres_db: str = "crypto_trading"
@@ -25,7 +31,7 @@ class Settings(BaseSettings):
     redis_db: int = 0
 
     jwt_secret_key: str = ""
-    jwt_algorithm: str = "HS256"
+    jwt_algorithm: Literal["HS256", "HS384", "HS512"] = "HS256"
     jwt_access_token_minutes: int = 1440
     jwt_refresh_token_minutes: int = 10080
     email_verification_token_minutes: int = 1440

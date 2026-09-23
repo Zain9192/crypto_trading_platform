@@ -123,7 +123,10 @@ def setup_two_factor(
     service: Annotated[AuthService, Depends(get_auth_service)],
     current_user: Annotated[dict[str, Any], Depends(get_current_user)],
 ) -> TwoFactorSetupResponse:
-    secret, uri = service.setup_totp(int(current_user["user_id"]))
+    try:
+        secret, uri = service.setup_totp(int(current_user["user_id"]))
+    except AuthenticationError as exc:
+        raise HTTPException(409, str(exc)) from None
     return TwoFactorSetupResponse(secret=secret, otpauth_uri=uri)
 
 

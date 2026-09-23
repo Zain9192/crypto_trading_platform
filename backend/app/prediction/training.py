@@ -11,6 +11,7 @@ from app.prediction.artifacts import ArtifactStore
 from app.prediction.data import FEATURES, FEATURE_VERSION, chronological_split, feature_frame, samples_from_frame
 from app.prediction.evaluation import backtest, evaluate
 from app.prediction.models import fit_models
+from app.prediction.drift import baseline
 from app.prediction.registry import Registry
 
 
@@ -50,6 +51,7 @@ def train_version(candles: list[OhlcvCandle], artifacts: ArtifactStore, registry
                    for name, split in (("train", train), ("validation", validation), ("test", test))},
         "validation_absolute_error_p95": float(np.quantile(np.abs(validation.returns - val_forecast), 0.95)),
         "metrics": results,
+        "drift_baseline": baseline(train.X[:, -1, :], FEATURES),
         "backtest": backtest(test.returns, test_forecast, test_probability, fee_bps),
         "confidence_kind": "uncalibrated_random_forest_probability",
     }

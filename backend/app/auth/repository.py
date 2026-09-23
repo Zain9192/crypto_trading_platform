@@ -21,6 +21,7 @@ class UserRepositoryProtocol(Protocol):
     def reset_failed_login(self, user_id: int) -> None: ...
     def save_refresh_token(self, jti: str, user_id: int, expires_at: datetime) -> None: ...
     def get_refresh_token(self, jti: str) -> dict[str, Any] | None: ...
+    def consume_refresh_token(self, jti: str, user_id: int) -> bool: ...
     def revoke_refresh_token(self, jti: str) -> None: ...
     def save_totp_secret(self, user_id: int, encrypted_secret: str) -> None: ...
     def enable_totp(self, user_id: int) -> None: ...
@@ -174,6 +175,15 @@ class PostgresUserRepository:
             )
             return cursor.fetchone()
 
+    def consume_refresh_token(self, jti: str, user_id: int) -> bool:
+        with self.connection.cursor() as cursor:
+            cursor.execute("""UPDATE refresh_tokens SET revoked_at=now()
+                WHERE jti=%s AND user_id=%s AND revoked_at IS NULL AND expires_at>now()
+                RETURNING jti""", (jti,user_id))
+            consumed = cursor.fetchone() is not None
+        self.connection.commit()
+        return consumed
+
     def revoke_refresh_token(self, jti: str) -> None:
         with self.connection.cursor() as cursor:
             cursor.execute(
@@ -191,11 +201,15 @@ class PostgresUserRepository:
             cursor.execute(
                 """
                 UPDATE users
-                SET totp_secret = %s, totp_enabled = FALSE, updated_at = NOW()
-                WHERE user_id = %s
+                SET totp_secret = %s, updated_at = NOW()
+                WHERE user_id = %s AND NOT totp_enabled
+                RETURNING user_id
                 """,
                 (encrypted_secret, user_id),
             )
+            if cursor.fetchone() is None:
+                self.connection.rollback()
+                raise ValueError('Disable existing two-factor authentication before replacing it')
         self.connection.commit()
 
     def enable_totp(self, user_id: int) -> None:

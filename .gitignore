@@ -41,3 +41,7 @@ data/processed/
 # Versioned prediction bundles (stored outside Git)
 model_artifacts/
 *.joblib
+
+frontend/test-results/
+frontend/playwright-report/
+qa-results/

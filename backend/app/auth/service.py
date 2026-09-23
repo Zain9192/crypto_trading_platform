@@ -123,7 +123,8 @@ class AuthService:
         if not user or not bool(user["is_active"]):
             raise AuthenticationError("User account is unavailable")
 
-        self.repository.revoke_refresh_token(jti)
+        if not self.repository.consume_refresh_token(jti, int(user['user_id'])):
+            raise TokenError('Refresh token has already been used')
         return self._issue_token_pair(user)
 
     def logout(self, refresh_token: str) -> None:
@@ -137,15 +138,24 @@ class AuthService:
         user = self.repository.get_user_by_id(int(payload["sub"]))
         if not user or not bool(user["is_active"]):
             raise AuthenticationError("User account is unavailable")
+        sid = payload.get('sid')
+        session = self.repository.get_refresh_token(str(sid)) if sid else None
+        if not session or session['user_id'] != int(user['user_id']) or session['revoked_at'] is not None or session['expires_at'] <= datetime.now(timezone.utc):
+            raise TokenError('Session expired or revoked; sign in again')
         return user
 
     def setup_totp(self, user_id: int) -> tuple[str, str]:
         user = self.repository.get_user_by_id(user_id)
         if not user:
             raise AuthenticationError("User account is unavailable")
+        if bool(user['totp_enabled']):
+            raise AuthenticationError('Disable existing two-factor authentication before replacing it')
         secret = pyotp.random_base32()
         encrypted_secret = encrypt_auth_secret(secret, self.settings)
-        self.repository.save_totp_secret(user_id, encrypted_secret)
+        try:
+            self.repository.save_totp_secret(user_id, encrypted_secret)
+        except ValueError as exc:
+            raise AuthenticationError(str(exc)) from None
         uri = pyotp.TOTP(secret).provisioning_uri(
             name=str(user["email"]),
             issuer_name=self.settings.totp_issuer,
@@ -171,14 +181,12 @@ class AuthService:
         self.repository.disable_totp(user_id)
 
     def _issue_token_pair(self, user: dict[str, Any]) -> dict[str, Any]:
+        refresh_token, jti, refresh_expires_at = create_refresh_token(int(user['user_id']), self.settings)
         access_token, access_expires_at = create_access_token(
             user_id=int(user["user_id"]),
             role=str(user["role"]),
             settings=self.settings,
-        )
-        refresh_token, jti, refresh_expires_at = create_refresh_token(
-            user_id=int(user["user_id"]),
-            settings=self.settings,
+            session_id=jti,
         )
         self.repository.save_refresh_token(jti, int(user["user_id"]), refresh_expires_at)
         expires_in = max(

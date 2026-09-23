@@ -1,4 +1,7 @@
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from app.core.request_security import RequestSecurity
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.auth import router as auth_router
@@ -22,11 +25,21 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[value.strip() for value in settings.cors_origins.split(",") if value.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(RequestSecurity,settings=settings)
+
+
+@app.exception_handler(RequestValidationError)
+async def safe_validation_error(request,exc):
+    return JSONResponse(status_code=422,content={'detail':[
+        {'loc':list(error['loc']),'type':error['type'],'msg':error['msg']}
+        for error in exc.errors()]})
+
 
 app.include_router(health_router, prefix=settings.api_v1_prefix)
 app.include_router(auth_router, prefix=settings.api_v1_prefix)
