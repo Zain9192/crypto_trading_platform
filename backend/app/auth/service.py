@@ -65,12 +65,10 @@ class AuthService:
         expires_at = datetime.now(timezone.utc) + timedelta(
             minutes=self.settings.email_verification_token_minutes
         )
-        self.repository.create_email_verification_token(
-            user_id=int(user["user_id"]),
-            token_hash=hash_one_time_token(raw_token),
-            expires_at=expires_at,
-            email_ciphertext=encrypt_auth_secret(raw_token, self.settings) if self.settings.app_env == 'production' else None,
-        )
+        token_args = dict(user_id=int(user['user_id']), token_hash=hash_one_time_token(raw_token), expires_at=expires_at)
+        if self.settings.app_env == 'production':
+            token_args['email_ciphertext'] = encrypt_auth_secret(raw_token, self.settings)
+        self.repository.create_email_verification_token(**token_args)
         return user, raw_token
 
     def verify_email(self, raw_token: str) -> dict[str, Any]:
