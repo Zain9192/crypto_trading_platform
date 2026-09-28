@@ -3,6 +3,7 @@ import signal
 import smtplib
 import ssl
 import threading
+from datetime import datetime, timezone
 from email.message import EmailMessage
 
 import httpx
@@ -10,6 +11,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 from app.core.config import get_settings
+from app.core.security import decrypt_auth_secret
 
 log = logging.getLogger(__name__)
 
@@ -35,17 +37,20 @@ class EmailSender:
         self.settings = settings
 
     def send(self, row):
+        subject, body = content(row)
+        self.send_message(row['email'], subject, body, f"notification-{row['notification_id']}")
+
+    def send_message(self, email, subject, body, message_id):
         s = self.settings
         if not s.notification_email_from:
             raise ValueError('Email sender is not configured')
-        subject, body = content(row)
         if s.notification_email_provider == 'sendgrid':
             if not s.notification_sendgrid_key.get_secret_value():
                 raise ValueError('SendGrid is not configured')
             with httpx.Client(timeout=20) as client:
                 response = client.post('https://api.sendgrid.com/v3/mail/send',
                     headers={'Authorization': f'Bearer {s.notification_sendgrid_key.get_secret_value()}'},
-                    json={'personalizations': [{'to': [{'email': row['email']}]}],
+                    json={'personalizations': [{'to': [{'email': email}]}],
                           'from': {'email': s.notification_email_from}, 'subject': subject,
                           'content': [{'type': 'text/plain', 'value': body}]})
                 response.raise_for_status()
@@ -53,8 +58,8 @@ class EmailSender:
             if not s.notification_smtp_host:
                 raise ValueError('SMTP is not configured')
             message = EmailMessage()
-            message['From'], message['To'], message['Subject'] = s.notification_email_from, row['email'], subject
-            message['Message-ID'] = f"<notification-{row['notification_id']}@crypto-platform.invalid>"
+            message['From'], message['To'], message['Subject'] = s.notification_email_from, email, subject
+            message['Message-ID'] = f"<{message_id}@crypto-platform.invalid>"
             message.set_content(body)
             with smtplib.SMTP(s.notification_smtp_host, s.notification_smtp_port, timeout=20) as client:
                 client.starttls(context=ssl.create_default_context())
@@ -63,6 +68,34 @@ class EmailSender:
                 client.send_message(message)
         else:
             raise ValueError('Email delivery is disabled')
+
+
+def deliver_verification(settings, sender):
+    if not configured(settings):
+        return False
+    with psycopg.connect(settings.postgres_dsn, row_factory=dict_row) as c:
+        row = c.execute('''SELECT o.user_id,o.token_ciphertext,o.expires_at,o.attempts,u.email,u.is_active,u.is_email_verified
+            FROM verification_email_outbox o JOIN users u USING(user_id)
+            WHERE o.sent_at IS NULL AND o.attempts<5 AND o.next_attempt_at<=now()
+            ORDER BY o.next_attempt_at LIMIT 1 FOR UPDATE OF o SKIP LOCKED''').fetchone()
+        if row is None:
+            return False
+        if row['expires_at'] <= datetime.now(timezone.utc) or not row['is_active'] or row['is_email_verified']:
+            c.execute('DELETE FROM verification_email_outbox WHERE user_id=%s', (row['user_id'],))
+            return True
+        try:
+            token = decrypt_auth_secret(row['token_ciphertext'], settings)
+            sender.send_message(row['email'], 'Verify your Crypto Trading Platform email',
+                                f'Enter this verification token in the account verification form:\n\n{token}\n\nThis token expires in {settings.email_verification_token_minutes} minutes.',
+                                f"verification-{row['user_id']}")
+        except Exception:
+            c.execute('''UPDATE verification_email_outbox SET attempts=attempts+1,
+                next_attempt_at=now()+(%s * interval '1 second') WHERE user_id=%s''',
+                (min(60 * 2 ** row['attempts'], 3600),row['user_id']))
+            log.warning('Verification email delivery failed (user %s)', row['user_id'])
+        else:
+            c.execute('UPDATE verification_email_outbox SET sent_at=now(),token_ciphertext=\'\' WHERE user_id=%s', (row['user_id'],))
+        return True
 
 
 def deliver_one(settings, sender):
@@ -107,7 +140,7 @@ def main():
     sender = EmailSender(settings)
     while not stop.is_set():
         try:
-            worked = deliver_one(settings, sender)
+            worked = deliver_verification(settings, sender) or deliver_one(settings, sender)
         except psycopg.Error:
             log.warning('Notification email storage unavailable')
             worked = False

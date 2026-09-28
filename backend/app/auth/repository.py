@@ -15,7 +15,8 @@ class UserRepositoryProtocol(Protocol):
     def get_user_by_email(self, email: str) -> dict[str, Any] | None: ...
     def get_user_by_id(self, user_id: int) -> dict[str, Any] | None: ...
     def create_user(self, username: str, email: str, password_hash: str) -> dict[str, Any]: ...
-    def create_email_verification_token(self, user_id: int, token_hash: str, expires_at: datetime) -> None: ...
+    def create_email_verification_token(self, user_id: int, token_hash: str, expires_at: datetime,
+                                        email_ciphertext: str | None = None) -> None: ...
     def consume_email_verification_token(self, token_hash: str) -> int | None: ...
     def record_failed_login(self, user_id: int, max_attempts: int, lockout_minutes: int) -> dict[str, Any]: ...
     def reset_failed_login(self, user_id: int) -> None: ...
@@ -80,7 +81,8 @@ class PostgresUserRepository:
             self.connection.rollback()
             raise DuplicateUserError("Email or username is already registered") from exc
 
-    def create_email_verification_token(self, user_id: int, token_hash: str, expires_at: datetime) -> None:
+    def create_email_verification_token(self, user_id: int, token_hash: str, expires_at: datetime,
+                                        email_ciphertext: str | None = None) -> None:
         with self.connection.cursor() as cursor:
             cursor.execute(
                 """
@@ -89,6 +91,11 @@ class PostgresUserRepository:
                 """,
                 (user_id, token_hash, expires_at),
             )
+            if email_ciphertext is not None:
+                cursor.execute("""INSERT INTO verification_email_outbox(user_id,token_ciphertext,expires_at)
+                    VALUES (%s,%s,%s) ON CONFLICT(user_id) DO UPDATE SET
+                    token_ciphertext=EXCLUDED.token_ciphertext,expires_at=EXCLUDED.expires_at,
+                    attempts=0,next_attempt_at=now(),sent_at=NULL""", (user_id,email_ciphertext,expires_at))
         self.connection.commit()
 
     def consume_email_verification_token(self, token_hash: str) -> int | None:
@@ -109,6 +116,7 @@ class PostgresUserRepository:
                 if not token_row:
                     return None
                 user_id = int(token_row["user_id"])
+                cursor.execute('DELETE FROM verification_email_outbox WHERE user_id=%s', (user_id,))
                 cursor.execute(
                     """
                     UPDATE users

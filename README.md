@@ -21,9 +21,18 @@ Available now:
 - Live market WebSocket feed with a default 30-second refresh cadence
 - Candlestick chart using TradingView Lightweight Charts
 - SMA, EMA, RSI, MACD, Bollinger Bands, and volume indicators
-- GitHub Actions backend/frontend CI
+- Paper portfolio, risk checks and virtual USD fills
+- Encrypted Binance/Coinbase/Kraken account connections; read-only production exchange APIs
+- Versioned RF/XGBoost/LSTM forecasts, offline training and opportunity ranking
+- Background paper and Binance spot testnet bot execution with reconciliation
+- Alerts, in-app notifications, opt-in provider email and CSV/PDF reports
+- Admin users, audit, health, exchange observations and model checks
+- GitHub Actions backend/frontend, browser, health concurrency and production image CI
+- Production Compose, TLS gateway, deploy workflow, backup and restore tooling
 
-The market dashboard is available in the frontend. Authentication is currently exercised through Swagger UI, curl, Postman, or another HTTP client because dedicated frontend auth screens are not implemented yet.
+The frontend includes market and signed-in account workspaces. Registration, login and optional 2FA have screens. Production signup verification tokens are queued for SMTP/SendGrid delivery; the registration response only exposes a verification token in development/test. Provider delivery still requires live validation.
+
+**Status:** Phases 1–10 are implemented and merged. Phase 11 release tooling is merged, but no live cloud deployment has been verified. Real-history model performance, external exchange/testnet account behavior, public market quotas, email delivery and planned end-to-end latency targets still require validation. See the [phase audit](docs/PROJECT_EXECUTION_PLAN.md#9-feature-sequence--do-not-reorder-without-approval) and [deployment setup](deploy/README.md).
 
 ## Technology stack
 
@@ -459,7 +468,7 @@ npm test
 npm run build
 ```
 
-GitHub Actions runs backend tests, frontend tests, and the frontend production build for feature branches and pull requests.
+GitHub Actions runs backend and frontend tests, a browser account journey, a 500-concurrent-request health check, a frontend build and production image/configuration checks for feature branches and pull requests. This health load check is not a full product performance benchmark.
 
 ## Useful development commands
 
@@ -497,15 +506,15 @@ docker compose exec mongodb mongosh crypto_market
 
 1. Foundation — complete
 2. Authentication — complete
-3. Market data — current
-4. AI/ML prediction
-5. Portfolio and risk
-6. Exchange integration
-7. Automated trading engine
-8. Alerts, notifications, and reports
-9. Admin
-10. QA/security hardening
-11. Deployment/operations
+3. Market data — merged
+4. AI/ML prediction — merged; real-history evaluation pending
+5. Portfolio and risk — merged
+6. Exchange integration — merged; provider validation pending
+7. Automated trading engine — merged; paper and Binance testnet
+8. Alerts, notifications, and reports — merged; external email validation pending
+9. Admin — merged
+10. QA/security hardening — merged; full latency targets unverified
+11. Deployment/operations — tooling merged; live deployment pending
 
 See [`docs/PROJECT_EXECUTION_PLAN.md`](docs/PROJECT_EXECUTION_PLAN.md) for the fixed scope and architecture rules.
 
@@ -616,14 +625,14 @@ Keep existing volumes; do not use `down -v` to upgrade. If upgrading from before
 ### Frontend walkthrough
 
 1. Open the frontend at `http://localhost:5173` for Vite development, or `http://localhost:5173` for Compose (or your configured `FRONTEND_PORT`). Choose **Portfolio & risk**.
-2. Sign in with a verified account (enter a 2FA code if enabled). For a new development account, choose **Create account**, register, confirm the supplied development verification token, then sign in. Production email delivery remains a later phase; the backend does not return development tokens in production.
+2. Sign in with a verified account (enter a 2FA code if enabled). For a new development account, choose **Create account**, register, confirm the supplied development verification token, then sign in. Production verification email requires a configured SMTP/SendGrid provider; the backend does not return development tokens in production.
 3. Create a paper portfolio with **1,000 virtual USD**. Creation is idempotent: a repeat returns your existing portfolio and never adds more cash.
 4. Reserve a **BTC buy**, quantity **2**, simulation price **100 USD**, fee **2 USD**. Available cash becomes **798**, reserved cash **202**. The default recorded stop/target are **95 / 110 USD**.
 5. Choose **Fill paper trade**. Cash becomes **798**, holding quantity **2**, cost basis **202**, average cost **101**. Market valuation uses the current public price, so it will not equal the simulation price.
 6. Reserve and fill a **BTC sell**, quantity **1**, simulation price **120 USD**, fee **1 USD**. Cash becomes **917**, remaining basis **101**, and realized P&L **18 USD**. Check the fill in **Trade history**.
 7. Set **Maximum open positions** to **1**, then attempt an ETH buy while holding BTC: the server rejects it. Reserve a BTC sell and cancel it to see available quantity restored.
 
-All prices entered in the trade form are **simulation inputs**, not live execution quotes. There are no real deposits, exchange calls, or automatic orders. Stop-loss/take-profit settings are recorded on new buys; monitoring and automatic execution belong to Phase 7. Changing settings does not retroactively change accepted reservations.
+All prices entered in this Phase 5 paper trade form are **simulation inputs**, not live execution quotes. The separate Phase 7 bot worker handles automatic paper and Binance sandbox orders. Changing paper settings does not retroactively change accepted reservations.
 
 ### Accounting and valuation
 
@@ -658,3 +667,9 @@ Automated tests use synthetic prices. PostgreSQL accounting, ownership, cursor p
 The signed-in account workspace now includes **Exchange connections** for Binance, Coinbase Advanced Trade and Kraken. Save/replace encrypted credentials and inspect balances, prices, existing orders and recent trades. Production access remains read-only; Binance spot testnet is supported and unsupported sandbox choices fail explicitly.
 
 For existing deployments, apply `database/postgres/005_exchange.sql`, configure a dedicated `EXCHANGE_ENCRYPTION_KEY`, then rebuild Compose. See [Phase 6 operations](docs/PHASE_6_OPERATIONS.md) for setup, APIs, capability limits and key rotation, and [Phase 6 checklist](docs/PHASE_6_CHECKLIST.md) for verification status.
+
+## Phases 7–11 — account workspace and operations
+
+After upgrading an existing PostgreSQL volume, apply migrations `006_trading.sql` through `013_verification_email.sql` in filename order; fresh Compose volumes initialize them automatically. Rebuild and start the `trading-worker` and `notification-worker` services with the backend/frontend. The signed-in workspace provides bot controls, inbox/alerts, reports and admin tools for admin users. Paper bots require an active compatible model and fresh market history; Binance testnet bots additionally require verified sandbox credentials. Production exchange writes stay disabled.
+
+Notification email is opt-in and disabled until SMTP or SendGrid is configured; verification tokens are queued encrypted in production and sent by the email worker. The admin dashboard reads audit and health data; it does not replace external provider checks. Use [the plan](docs/PROJECT_EXECUTION_PLAN.md#9-feature-sequence--do-not-reorder-without-approval) for outstanding phase validation and [the production runbook](deploy/README.md) for TLS, secrets, backups and the manual deployment workflow.
