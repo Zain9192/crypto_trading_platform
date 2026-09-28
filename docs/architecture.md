@@ -1,6 +1,10 @@
-# Architecture through Phase 4
+# Architecture and implementation status
 
-The application is a modular FastAPI backend with a React SPA. A separate market-ingestion process uses the same service/provider/repository modules as the API. Authentication, market data and the Phase 4 prediction backend are implemented. Portfolio/risk management, exchange execution and notifications remain later phases.
+The application is a modular FastAPI backend with a React SPA. PostgreSQL owns users, portfolios, exchange connections, bots, orders, alerts and model metadata; MongoDB owns OHLCV history; Redis handles caches and request limits. Separate ingestion, trading and email workers share application services with the API. Operator-run model training writes versioned artifacts to a shared volume. Phases 1–10 and the Phase 11 release configuration are merged.
+
+Paper portfolio fills use virtual USD. The trading worker can execute paper decisions or Binance spot testnet orders with reservations and reconciliation; production exchange mutations are disabled. Authenticated account tabs cover portfolio, connections, bots and notifications; admin-only routes cover users, audit, model and provider status. The production stack uses Nginx/TLS, health checks, migrations and offsite backups; no live deployment has been verified.
+
+Operational gaps: production registration now queues encrypted verification tokens but needs a configured and validated email provider; real-market model training/evaluation, public-provider quotas, Binance testnet account behavior and SMTP/SendGrid delivery require external validation. CI's 500-request concurrency check targets a deterministic health route, not the plan's market/prediction/trade latency targets. Forecast confidence is uncalibrated and trading performance is unproven.
 
 ```mermaid
 flowchart TD
@@ -24,13 +28,13 @@ flowchart TD
 
 ## Data ownership and limits
 
-PostgreSQL remains the source of truth for users and future transactional trading state. MongoDB stores market/time-series records. Redis is only a transient cache.
+PostgreSQL is the source of truth for users and transactional trading state. MongoDB stores market/time-series records. Redis is only a transient cache.
 
 Historical ingestion is a bounded initial backfill plus recurring updates, not an unlimited exchange-history download. Public API rate limits and unsupported Binance pairs can leave gaps; failures are explicit rather than filled with fabricated values. Automated tests mock providers and storage; this phase has not been validated against live provider quotas or a running Docker deployment.
 
 ## Delivery
 
-Phase 3 work is confined to `feature/market-data` and reviewed in PR #6. The owner merges into main. SonarQube is deferred by owner request; backend/frontend CI remains active.
+Phase 3 was reviewed in PR #6 and merged into main. SonarQube is deferred by owner request; backend/frontend CI remains active.
 
 
 ## Prediction architecture
@@ -55,7 +59,7 @@ The service obtains a consistent portfolio snapshot inside the transaction, rele
 
 React adds a Portfolio & risk tab with memory-only authentication and coordinated refresh rotation, a per-session query cache identity, risk forms, holdings, pending paper trades and cursor-paginated history. Decimal request fields remain strings; JavaScript numbers are used only for display formatting and integer limits. The market tab remains public.
 
-Stop-loss and take-profit thresholds are recorded on buy reservations using the settings accepted at reservation time. They are not automatic exit orders. Exchange connectivity, automatic execution, alerts and production email delivery remain in their planned later phases.
+Stop-loss and take-profit thresholds on Phase 5 paper reservations are recorded at reservation time; Phase 7 bot positions separately monitor protective exits. Exchange connectivity, execution and notifications are described in the current implementation status above.
 
 ## Phase 6: exchange integration
 

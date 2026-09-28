@@ -212,9 +212,9 @@ Delivered:
 - Risk validation service
 - Portfolio/trade-history APIs and UI
 
-### Phase 6 — Exchange Integration — COMPLETE (owner merge pending)
+### Phase 6 — Exchange Integration — IMPLEMENTED; MERGED
 
-Branch: `feature/exchange-integration`. Progress: [Phase 6 checklist](PHASE_6_CHECKLIST.md). The adapters, encrypted connection storage, read-only APIs and frontend are implemented. Validation passed: 147 backend tests and 14 frontend tests in CI, with the production build. Owner review and merge of PR #10 remain; [operations](PHASE_6_OPERATIONS.md) documents provider limits and the Phase 7 execution boundary.
+Branch: `feature/exchange-integration`. Progress: [Phase 6 checklist](PHASE_6_CHECKLIST.md). The adapters, encrypted connection storage, read-only APIs and frontend are merged. Validation passed: 147 backend tests and 14 frontend tests in CI, with the production build. [Operations](PHASE_6_OPERATIONS.md) documents provider limits. Live exchange credentials and provider behavior remain unverified.
 
 Implement an exchange abstraction with operations similar to:
 
@@ -237,7 +237,9 @@ Requirements:
 - Encrypt stored exchange API credentials.
 - Use sandbox/testnet integrations before any live-money testing.
 
-### Phase 7 — Automated Trading Engine
+### Phase 7 — Automated Trading Engine — IMPLEMENTED; MERGED
+
+Paper execution and Binance spot testnet execution use a background worker, risk and balance checks, idempotent order reservations, fill reconciliation and protective exits. Production exchange order placement is disabled. External testnet behavior requires a configured account and credentials.
 
 Implement:
 - Bot configuration
@@ -258,7 +260,7 @@ Implement:
 
 Critical rule: do not enable unrestricted live-money execution during normal development or automated tests.
 
-### Phase 8 — Alerts, Notifications, and Reports — implementation complete
+### Phase 8 — Alerts, Notifications, and Reports — IMPLEMENTED; MERGED
 
 Delivered on `feature/alerts-notifications`:
 - [x] One-shot USD price alerts evaluated against fresh top-50 market quotes.
@@ -276,9 +278,11 @@ Email defaults to disabled. Configure `NOTIFICATION_EMAIL_PROVIDER`, `NOTIFICATI
 
 Reports are owner-scoped and cover up to 367 UTC calendar days and 5,000 fills per export. Paper USD and sandbox USDT remain separate; fees retain their recorded currency. Price alerts pause when an asset leaves the top-50 market list.
 
-Validation: frontend production build, API loading, migrations 001–011, and CSV/PDF generation succeeded locally. Existing GitHub Actions checks run on the feature branch. Dedicated Phase 8 test cases remain deferred to Phase 10 at the owner's request; implementation completion does not imply production or external-provider verification.
+At Phase 8 delivery, the frontend production build, API loading, migrations 001–011, and CSV/PDF generation succeeded locally. Subsequent Phase 10 CI covers notification storage and permissions; external-provider delivery remains unverified.
 
-### Phase 9 — Admin
+### Phase 9 — Admin — IMPLEMENTED; MERGED
+
+Admin-only user/role changes, audit history, overview, storage/provider health checks, model metrics and forecast checks, exchange failure observations and bot status are available in the API and account workspace.
 
 Implement:
 - User administration
@@ -289,7 +293,9 @@ Implement:
 - Prediction/model health
 - Operational logs/status summaries
 
-### Phase 10 — QA and Security Hardening
+### Phase 10 — QA and Security Hardening — IMPLEMENTED; MERGED
+
+CI covers backend/frontend tests, a browser account journey, production image validation and 500 concurrent requests to a deterministic health endpoint. Session checks, rate limits, input boundaries, exchange failure behavior, model leakage/drift checks and database concurrency are covered. The health concurrency run does not establish the latency or throughput targets below for real market, prediction or trading flows.
 
 Implement/validate:
 - Functional tests
@@ -314,7 +320,7 @@ Performance targets to validate later:
 - Internal API target around 300 ms for standard operations
 - 500+ concurrent-user target through load testing
 
-### Phase 11 — Deployment and Operations
+### Phase 11 — Deployment and Operations — TOOLING MERGED; LIVE DEPLOY PENDING
 
 Implement:
 - Production Docker images
@@ -376,17 +382,19 @@ Automated tests must not depend on real exchange funds or unstable third-party A
 
 ## 9. Feature sequence — do not reorder without approval
 
-1. Foundation — complete
-2. Authentication — complete
-3. Market data — complete
-4. AI/ML prediction — complete
-5. Portfolio and risk — complete; PR #9 merged
-6. Exchange integration
-7. Automated trading engine
-8. Alerts, notifications, reports — implementation complete; external email verification pending
-9. Admin
-10. QA/security hardening
-11. Deployment/operations
+1. Foundation — merged
+2. Authentication — merged; production verification email queued, provider validation pending
+3. Market data — merged; public-provider quotas unverified
+4. AI/ML prediction — merged; real-history training and performance evaluation pending
+5. Portfolio and risk — merged; paper mode
+6. Exchange integration — merged; live provider/account validation pending
+7. Automated trading engine — merged; paper and Binance sandbox; account validation pending
+8. Alerts, notifications, reports — merged; external email delivery unverified
+9. Admin — merged
+10. QA/security hardening — merged; end-to-end performance targets unverified
+11. Deployment/operations — implementation merged; live deployment pending
+
+Implementation review: the planned modules for Phases 1–10 exist on `main`, and the merged Phase 11 CI run passed. The items above are the remaining verification/integration gaps; neither a passing synthetic CI suite nor a forecast implies profitability or production readiness. Production verification tokens are queued encrypted and sent through the configured SMTP/SendGrid provider; preflight refuses a release without that configuration. External provider delivery still needs a real account check.
 
 The dependency chain is intentionally: foundation -> auth/market data -> prediction -> portfolio/risk -> exchange integration -> automated trading -> hardening/deployment.
 

@@ -47,6 +47,14 @@ class AuthService:
         self.settings = settings
 
     def register(self, username: str, email: str, password: str) -> tuple[dict[str, Any], str]:
+        if self.settings.app_env == 'production' and (
+            not self.settings.notification_email_from or
+            self.settings.notification_email_provider == 'disabled' or
+            self.settings.notification_email_provider == 'smtp' and not self.settings.notification_smtp_host or
+            self.settings.notification_email_provider == 'sendgrid' and
+            not self.settings.notification_sendgrid_key.get_secret_value()
+        ):
+            raise RuntimeError('Email verification delivery is unavailable')
         existing = self.repository.get_user_by_email(email)
         if existing:
             raise DuplicateUserError("Email or username is already registered")
@@ -57,11 +65,10 @@ class AuthService:
         expires_at = datetime.now(timezone.utc) + timedelta(
             minutes=self.settings.email_verification_token_minutes
         )
-        self.repository.create_email_verification_token(
-            user_id=int(user["user_id"]),
-            token_hash=hash_one_time_token(raw_token),
-            expires_at=expires_at,
-        )
+        token_args = dict(user_id=int(user['user_id']), token_hash=hash_one_time_token(raw_token), expires_at=expires_at)
+        if self.settings.app_env == 'production':
+            token_args['email_ciphertext'] = encrypt_auth_secret(raw_token, self.settings)
+        self.repository.create_email_verification_token(**token_args)
         return user, raw_token
 
     def verify_email(self, raw_token: str) -> dict[str, Any]:

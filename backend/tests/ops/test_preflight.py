@@ -12,7 +12,9 @@ def test_production_preflight_accepts_generated_keys_and_rejects_placeholders():
                   mongo_user="crypto", mongo_password="m" * 32, redis_password="r" * 32,
                   jwt_secret_key="j" * 32,
                   auth_data_encryption_key=Fernet.generate_key().decode(),
-                  exchange_encryption_key=base64.b64encode(b"x" * 32).decode())
+                  exchange_encryption_key=base64.b64encode(b"x" * 32).decode(),
+                  notification_email_provider='smtp', notification_email_from='verify@example.com',
+                  notification_smtp_host='smtp.example.com')
     validate(Settings(**values))
     with pytest.raises(RuntimeError, match="jwt_secret_key"):
         validate(Settings(**{**values, "jwt_secret_key": "replace-with-a-long-random-secret-at-least-32-characters"}))

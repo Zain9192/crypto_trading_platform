@@ -56,6 +56,9 @@ def register(payload: UserCreate, service: Annotated[AuthService, Depends(get_au
         )
     except DuplicateUserError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except RuntimeError:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail='Email verification delivery is unavailable') from None
 
     settings = get_settings()
     development_token = raw_verification_token if settings.app_env in {"development", "test"} else None

@@ -26,6 +26,12 @@ def validate(settings):
         raise RuntimeError("Configure a valid EXCHANGE_ENCRYPTION_KEY") from exc
     if len(key) != 32:
         raise RuntimeError("EXCHANGE_ENCRYPTION_KEY must contain 32 bytes")
+    if not settings.notification_email_from or settings.notification_email_provider == 'disabled':
+        raise RuntimeError('Configure verification email delivery')
+    if settings.notification_email_provider == 'smtp' and not settings.notification_smtp_host:
+        raise RuntimeError('Configure NOTIFICATION_SMTP_HOST')
+    if settings.notification_email_provider == 'sendgrid' and not settings.notification_sendgrid_key.get_secret_value():
+        raise RuntimeError('Configure NOTIFICATION_SENDGRID_KEY')
 
 
 if __name__ == "__main__":
