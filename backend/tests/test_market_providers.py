@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 
 import httpx
 
@@ -50,9 +51,12 @@ def test_binance_provider_normalizes_ohlcv() -> None:
     client = httpx.Client(transport=httpx.MockTransport(handler))
     provider = BinanceOhlcvProvider("https://example.test", client=client)
 
+    before = datetime.now(timezone.utc)
     candles = provider.fetch_ohlcv("btc", "1h", 100)
 
     assert len(candles) == 1
     assert candles[0].symbol == "BTC"
     assert candles[0].close == 60500
     assert candles[0].volume == 125.5
+    # The fetch time lets predictions reject candles stored before they closed.
+    assert before <= candles[0].fetched_at <= datetime.now(timezone.utc)

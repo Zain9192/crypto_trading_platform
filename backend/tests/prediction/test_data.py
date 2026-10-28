@@ -29,6 +29,16 @@ def test_unclosed_candles_are_excluded(candles):
     assert frame.index[-1] == candles[-2].timestamp
 
 
+def test_candles_fetched_before_close_are_excluded(candles):
+    end = candles[-1].timestamp + timedelta(days=1)
+    now = end + timedelta(minutes=5)
+    candles[-1] = candles[-1].model_copy(update={"fetched_at": end - timedelta(minutes=10)})
+    assert feature_frame(candles, now).index[-1] == candles[-2].timestamp
+    # MongoDB returns naive UTC datetimes; a snapshot fetched after the close is complete.
+    candles[-1] = candles[-1].model_copy(update={"fetched_at": (end + timedelta(minutes=1)).replace(tzinfo=None)})
+    assert feature_frame(candles, now).index[-1] == candles[-1].timestamp
+
+
 @pytest.mark.parametrize("kind", ["gap", "duplicate", "bad_price", "mixed_quote"])
 def test_bad_history_is_rejected(candles, kind):
     if kind == "gap":
