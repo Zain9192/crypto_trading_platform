@@ -3,13 +3,18 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import numpy as np
+from pymongo.errors import PyMongoError
 
+from app.market.providers import ProviderError
 from app.market.schemas import MarketInterval
 from app.prediction.artifacts import ArtifactStore
-from app.prediction.data import DataError, FEATURES, FEATURE_VERSION, candle_end, feature_frame
+from app.prediction.data import DataError, FEATURES, FEATURE_VERSION, candle_end, feature_frame, partial_snapshot
 from app.prediction.registry import Registry
 from app.prediction.drift import assess
 from app.prediction.schemas import Forecast, RankedForecast, RankingResponse
+
+
+REFRESH_CANDLES = 5
 
 
 class ModelUnavailable(RuntimeError):
@@ -38,6 +43,13 @@ class PredictionService:
             metadata["feature_version"] != FEATURE_VERSION or metadata["features"] != FEATURES):
             raise ModelUnavailable("Model feature or asset contract does not match")
         candles = self.market.get_history(symbol, interval, 1000)
+        if any(partial_snapshot(candle, now) for candle in candles[-REFRESH_CANDLES:]):
+            # The ingestion cycle has not yet re-fetched a candle that closed since its last pass.
+            try:
+                self.market.ingest_ohlcv(symbol, interval, REFRESH_CANDLES)
+            except (ProviderError, PyMongoError) as exc:
+                raise ModelUnavailable("Latest candle is incomplete and could not be refreshed; retry shortly") from exc
+            candles = self.market.get_history(symbol, interval, 1000)
         frame = feature_frame(candles, now)
         if candles[0].quote_asset != metadata["quote_asset"] or candles[0].provider != metadata["provider"]:
             raise DataError("History quote asset or provider does not match the model")
@@ -56,11 +68,19 @@ class PredictionService:
         if expected <= -1:
             raise ModelUnavailable("Forecast implies a non-positive price; model requires review")
         price = float(frame.close.iloc[-1])
+        # Direction comes from the classifier and price from the regressors; report a
+        # direction only when both agree, so "up" never accompanies a lower predicted price.
+        if up > 0.5 and expected > 0:
+            direction, confidence = "up", up
+        elif up < 0.5 and expected < 0:
+            direction, confidence = "down", 1 - up
+        else:
+            direction, confidence = "neutral", 0.5
         result = Forecast(
             symbol=symbol, interval=interval, quote_asset=metadata["quote_asset"], model_version=record["version"],
             as_of=as_of, forecast_for=forecast_for, generated_at=now,
             current_price=price, predicted_price=price * (1 + expected),
-            direction="up" if up >= 0.5 else "down", up_probability=up, confidence=max(up, 1 - up),
+            direction=direction, up_probability=up, confidence=confidence,
             expected_return=expected, estimated_risk=float(frame.return_1.tail(20).std()),
             validation_error_p95=metadata["validation_absolute_error_p95"],
             drift=assess(frame[FEATURES].to_numpy(dtype=float)[-120:], FEATURES, metadata.get("drift_baseline")),

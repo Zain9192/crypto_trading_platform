@@ -17,7 +17,8 @@ class Forecast(BaseModel):
     generated_at: datetime
     current_price: float = Field(gt=0, allow_inf_nan=False)
     predicted_price: float = Field(gt=0, allow_inf_nan=False)
-    direction: Literal["up", "down"]
+    # "neutral" when the direction classifier and the return forecast disagree.
+    direction: Literal["up", "down", "neutral"]
     up_probability: float = Field(ge=0, le=1)
     confidence: float = Field(ge=0.5, le=1)
     confidence_kind: str = "uncalibrated_random_forest_probability"

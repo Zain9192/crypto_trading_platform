@@ -37,3 +37,4 @@ Initial training requires sufficient persisted history with continuous candles. 
 - Follow-up setup fix: default historical ingestion increased from 200 to 500 candles so fresh deployments can build the required training dataset.
 - Follow-up compatibility fix: candle-boundary calculations use standard-library durations/calendar arithmetic, removing repeated NumPy timedelta deprecations.
 - Real-data model training/activation is a deployment task; no production model or market-performance claim is implied by CI.
+- Follow-up data-integrity fix (`fix/prediction-data-integrity`): candles record their provider fetch time, so features exclude a candle stored before it closed, and inference re-fetches it first. The API reports `neutral` direction when the classifier and the return forecast disagree, so `up` no longer accompanies a lower predicted price.

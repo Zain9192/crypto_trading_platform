@@ -29,6 +29,16 @@ def candle_end(timestamp: datetime, interval: MarketInterval) -> datetime:
     return timestamp + timedelta(seconds=seconds)
 
 
+def _utc(value: datetime) -> datetime:
+    # MongoDB returns naive UTC datetimes.
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+
+def partial_snapshot(candle: OhlcvCandle, now: datetime) -> bool:
+    """A candle that has closed but whose stored values were fetched while it was still open."""
+    end = candle_end(_utc(candle.timestamp), candle.interval)
+    return end <= now and candle.fetched_at is not None and _utc(candle.fetched_at) < end
+
 
 def feature_frame(candles: list[OhlcvCandle], now: datetime | None = None) -> pd.DataFrame:
     if not candles:
@@ -43,7 +53,7 @@ def feature_frame(candles: list[OhlcvCandle], now: datetime | None = None) -> pd
     for candle in candles:
         timestamp = pd.Timestamp(candle.timestamp)
         timestamp = timestamp.tz_localize("UTC") if timestamp.tzinfo is None else timestamp.tz_convert("UTC")
-        if candle_end(timestamp.to_pydatetime(), candle.interval) <= now:
+        if candle_end(timestamp.to_pydatetime(), candle.interval) <= now and not partial_snapshot(candle, now):
             closed.append(candle.model_copy(update={"timestamp": timestamp.to_pydatetime()}))
     if len(closed) < 60:
         raise DataError("At least 60 closed candles are required for feature warm-up")

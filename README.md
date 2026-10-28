@@ -601,7 +601,7 @@ curl -H "Authorization: Bearer $ACCESS_TOKEN" "http://localhost:8000/api/v1/pred
 curl -X POST -H "Authorization: Bearer $ACCESS_TOKEN" -H "Content-Type: application/json"   -d '{"symbols":["BTC","ETH"],"interval":"1d"}' "http://localhost:8000/api/v1/predictions/opportunities"
 ```
 
-Forecasts include model version, data close time (`as_of`), forecast target close time, current/predicted price, RF direction/up probability, confidence, expected return, recent candle volatility, and validation absolute-error percentile. Expected returns and risk values are fractions (`0.01` means 1%). The classifier's direction and the regressors' forecast may disagree; they are separate estimates. Inactive/missing models or stale history return HTTP 503; invalid history returns HTTP 422. Ranking reports unavailable assets explicitly, compares one interval at a time, and places no orders.
+Forecasts include model version, data close time (`as_of`), forecast target close time, current/predicted price, direction, RF up probability, confidence, expected return, recent candle volatility, and validation absolute-error percentile. Expected returns and risk values are fractions (`0.01` means 1%). `direction` is `up` or `down` only when the RF classifier and the regressors' expected return agree; otherwise it is `neutral` with confidence 0.5, which trading bots treat as hold. Before forecasting, a candle that closed after it was last fetched is re-fetched from Binance; if that fails, the forecast returns HTTP 503 rather than using partial candle values. Inactive/missing models or stale history return HTTP 503; invalid history returns HTTP 422. Ranking reports unavailable assets explicitly, compares one interval at a time, and places no orders.
 
 ### 5. Evaluate and verify
 

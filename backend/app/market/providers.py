@@ -101,6 +101,8 @@ class BinanceOhlcvProvider:
             raise ValueError("Symbol is required")
         pair = base_symbol if base_symbol.endswith(self.quote_asset) else f"{base_symbol}{self.quote_asset}"
 
+        # Stamped before the request so a response racing a candle close counts as partial.
+        fetched_at = datetime.now(timezone.utc)
         try:
             response = self._client.get(
                 f"{self.base_url}/api/v3/klines",
@@ -130,6 +132,7 @@ class BinanceOhlcvProvider:
                     volume=float(row[5]),
                     quote_asset=self.quote_asset,
                     provider="binance",
+                    fetched_at=fetched_at,
                 )
             )
         return candles

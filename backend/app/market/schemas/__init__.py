@@ -44,6 +44,9 @@ class OhlcvCandle(BaseModel):
     volume: float
     quote_asset: str = "USDT"
     provider: str = "binance"
+    # When the provider request was sent; a snapshot taken before the candle
+    # closed holds partial values. None means unknown (legacy documents).
+    fetched_at: datetime | None = None
 
 
 class OhlcvResponse(BaseModel):
