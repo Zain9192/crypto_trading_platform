@@ -7,13 +7,14 @@ import ExchangeDashboard from './ExchangeDashboard'
 import TradingDashboard from './TradingDashboard'
 import NotificationsDashboard from './NotificationsDashboard'
 import AdminDashboard from './AdminDashboard'
+import PredictionsDashboard from './PredictionsDashboard'
 
 export default function PortfolioAccess() {
   // Tokens live only in memory; reloading requires sign-in. No browser storage.
   const session = useRef<Tokens | null>(null)
   const refreshing = useRef<Promise<Tokens> | null>(null)
   const [signedIn, setSignedIn] = useState(false)
-  const [section, setSection] = useState<'portfolio' | 'exchanges' | 'bots' | 'notifications' | 'admin'>('portfolio')
+  const [section, setSection] = useState<'portfolio' | 'predictions' | 'exchanges' | 'bots' | 'notifications' | 'admin'>('portfolio')
   const [isAdmin, setIsAdmin] = useState(false)
   const [mode, setMode] = useState<'login' | 'register' | 'verify'>('login')
   const [error, setError] = useState('')
@@ -96,12 +97,13 @@ export default function PortfolioAccess() {
     {error && <p role="alert" className="error-banner">{error}</p>}
     <nav className="portfolio-toolbar" aria-label="Account sections">
       <button aria-pressed={section === 'portfolio'} onClick={() => setSection('portfolio')}>Paper portfolio</button>
+      <button aria-pressed={section === 'predictions'} onClick={() => setSection('predictions')}>AI predictions</button>
       <button aria-pressed={section === 'exchanges'} onClick={() => setSection('exchanges')}>Exchange connections</button>
       <button aria-pressed={section === 'bots'} onClick={() => setSection('bots')}>Trading bots</button>
       <button aria-pressed={section === 'notifications'} onClick={() => setSection('notifications')}>Notifications & alerts</button>
       {isAdmin && <button aria-pressed={section === 'admin'} onClick={() => setSection('admin')}>Administration</button>}
     </nav>
-    {section === 'admin' ? (isAdmin ? <AdminDashboard request={request} /> : null) : section === 'portfolio' ? <PortfolioDashboard request={request} /> : section === 'exchanges' ? <ExchangeDashboard request={request} /> : section === 'bots' ? <TradingDashboard request={request} /> : <NotificationsDashboard request={request} getToken={async () => { await request('/auth/me'); if (!session.current) throw new Error('Signed out'); return session.current.access_token }} />}
+    {section === 'admin' ? (isAdmin ? <AdminDashboard request={request} /> : null) : section === 'portfolio' ? <PortfolioDashboard request={request} /> : section === 'predictions' ? <PredictionsDashboard request={request} /> : section === 'exchanges' ? <ExchangeDashboard request={request} /> : section === 'bots' ? <TradingDashboard request={request} /> : <NotificationsDashboard request={request} getToken={async () => { await request('/auth/me'); if (!session.current) throw new Error('Signed out'); return session.current.access_token }} />}
   </section>
   return <section className="portfolio-shell market-panel auth-panel">
     <p className="eyebrow">Portfolio & risk</p><h2>{mode === 'login' ? 'Sign in to your portfolio' : mode === 'register' ? 'Create an account' : 'Verify your email'}</h2>
