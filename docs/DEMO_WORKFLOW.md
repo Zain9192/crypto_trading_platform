@@ -7,7 +7,7 @@ Verified on 2026-11-14 (Windows 11, Docker Desktop, Compose v5): **57/57 end-to-
 | Part | What it covers | Time |
 | --- | --- | --- |
 | [A. Start the stack](#a-start-the-stack) | Docker services, migrations, market history | 5–15 min (first time) |
-| [B. Train AI models](#b-train-the-ai-models) | BTC and ETH 1d forecasts | ~3 min per model |
+| [B. Train AI models](#b-train-the-ai-models) | BTC and ETH forecasts for `1h`, `4h`, `1d`, `1w` | 1–3 min per model (~15–20 min all) |
 | [C. Automated end-to-end test](#c-automated-end-to-end-test) | All 11 modules through the API | ~2 min |
 | [D. Unit test suites](#d-unit-test-suites) | Backend pytest, frontend Vitest | ~1 min |
 | [E. Live browser demo](#e-live-browser-demo-script) | Presenter script, module by module | 15–20 min |
@@ -68,29 +68,89 @@ docker compose exec -T mongodb mongosh crypto_market --quiet --eval "db.market_d
 
 ## B. Train the AI models
 
-Bots, forecasts and ranking need an **active** model per symbol/interval.
+Bots, forecasts and ranking need an **active** model for **each symbol and interval** separately. A `1d` model does not answer `1h` requests — train every interval you want to show in the **AI predictions** screen or use in a bot.
+
+Each command takes about **1–3 minutes**. All 8 below take roughly **15–20 minutes**. Run them one by one, or skip intervals you do not need.
+
+### 1 hour (`1h`) — predicts the next hour
+
+```powershell
+docker compose --profile training run --rm prediction-trainer --symbol BTC --interval 1h --limit 1000 --lookback 20 --epochs 10 --trees 100 --activate
+docker compose --profile training run --rm prediction-trainer --symbol ETH --interval 1h --limit 1000 --lookback 20 --epochs 10 --trees 100 --activate
+```
+
+### 4 hours (`4h`) — predicts the next 4 hours
+
+```powershell
+docker compose --profile training run --rm prediction-trainer --symbol BTC --interval 4h --limit 1000 --lookback 20 --epochs 10 --trees 100 --activate
+docker compose --profile training run --rm prediction-trainer --symbol ETH --interval 4h --limit 1000 --lookback 20 --epochs 10 --trees 100 --activate
+```
+
+### 1 day (`1d`) — predicts the next day
 
 ```powershell
 docker compose --profile training run --rm prediction-trainer --symbol BTC --interval 1d --limit 1000 --lookback 20 --epochs 10 --trees 100 --activate
 docker compose --profile training run --rm prediction-trainer --symbol ETH --interval 1d --limit 1000 --lookback 20 --epochs 10 --trees 100 --activate
 ```
 
-The output is JSON with the version UUID, validation/test metrics (MAE, RMSE, directional accuracy, F1), the persistence baseline and a held-out backtest. Confirm:
+### 1 week (`1w`) — predicts the next week
 
 ```powershell
-docker compose exec -T postgres psql -U crypto_user -d crypto_trading -c "select model_id, symbol, timeframe, is_active from ml_models order by model_id"
+docker compose --profile training run --rm prediction-trainer --symbol BTC --interval 1w --limit 1000 --lookback 20 --epochs 10 --trees 100 --activate
+docker compose --profile training run --rm prediction-trainer --symbol ETH --interval 1w --limit 1000 --lookback 20 --epochs 10 --trees 100 --activate
 ```
 
-Expected — exactly **one active (`t`) row per symbol/interval**. Every retrain with `--activate` adds a new row and switches the previous version to `f` (it is kept for rollback):
+### 1 month (`1M`) — not trainable
 
-| model_id | symbol | timeframe | is_active |
-| --- | --- | --- | --- |
-| 1 | BTC | 1d | f |
-| 2 | ETH | 1d | f |
-| 3 | BTC | 1d | t |
-| 4 | ETH | 1d | t |
+Training needs roughly **300+ continuous candles** after indicator warm-up. Binance only has about **112 monthly** BTC/ETH candles, so `1M` training fails with *DataError: At least 200 supervised sequences are required; ingest at least 300 candles*. The `1M` interval still works for charts and indicators in the **Market data** tab; the AI predictions screen shows *no active model* for it.
 
-If training reports too few samples, ingestion has not finished — wait and retry. Omit `--activate` to create an inactive candidate and activate later with `--activate-version <UUID>`.
+### Data needed per interval
+
+| Interval | Stored candles (BTC, approx.) | Trainable |
+| --- | --- | --- |
+| `1h` | ~1000 | ✅ |
+| `4h` | ~660 | ✅ |
+| `1d` | ~527 | ✅ |
+| `1w` | ~483 | ✅ |
+| `1M` | ~112 | ❌ |
+
+Check your own counts before training:
+
+```powershell
+docker compose exec -T mongodb mongosh crypto_market --quiet --eval "db.market_data.aggregate([{`$match:{symbol:{`$in:['BTC','ETH']}}},{`$group:{_id:{s:'`$symbol',i:'`$interval'},n:{`$sum:1}}},{`$sort:{'_id.s':1,'_id.i':1}}]).forEach(x=>print(x._id.s,x._id.i,x.n))"
+```
+
+(The backticks before `$` stop PowerShell from treating `$match`, `$sum` etc. as its own variables.)
+
+### Output and confirmation
+
+Each run prints JSON with the version UUID, validation/test metrics (MAE, RMSE, directional accuracy, F1), the persistence baseline and a held-out backtest. Confirm the active models:
+
+```powershell
+docker compose exec -T postgres psql -U crypto_user -d crypto_trading -c "select symbol, timeframe, model_id, is_active from ml_models where is_active order by symbol, timeframe"
+```
+
+Expected — exactly **one active row per symbol/interval** (8 rows; your `model_id` values will differ):
+
+| symbol | timeframe | is_active |
+| --- | --- | --- |
+| BTC | 1d | t |
+| BTC | 1h | t |
+| BTC | 1w | t |
+| BTC | 4h | t |
+| ETH | 1d | t |
+| ETH | 1h | t |
+| ETH | 1w | t |
+| ETH | 4h | t |
+
+Every retrain with `--activate` adds a new row and switches the previous version for that symbol/interval to `f` (kept for rollback). To see all versions, drop `where is_active` from the query.
+
+### Notes
+
+- **Retrain short intervals more often.** `1h` and `4h` models go stale quickly — retrain them daily or weekly; `1d` / `1w` less often. The *Feature drift* badge on the AI predictions screen shows `review` when a model needs attention.
+- **`At least 200 supervised sequences are required`:** ingestion has not finished for that interval — wait for `History cycle persisted …` in `docker compose logs -f market-ingestion` and retry. For more `4h` / `1d` history set `MARKET_HISTORY_CANDLE_LIMIT=1000` in `.env` and run `docker compose up -d market-ingestion`.
+- **Other coins:** replace `BTC` / `ETH` with any top-50 symbol that has a Binance USDT pair (e.g. `SOL`, `BNB`, `XRP`).
+- Omit `--activate` to create an inactive candidate and activate later with `--activate-version <UUID>`.
 
 ---
 

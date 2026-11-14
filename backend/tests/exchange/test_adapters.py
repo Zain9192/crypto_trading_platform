@@ -146,3 +146,26 @@ def test_pinned_real_ccxt_constructors_without_network():
     adapter = BinanceAdapter(credentials(), ConnectionPolicy())
     assert 'testnet' in str(adapter._client.urls['api'])
     adapter.close()
+
+
+def test_binance_syncs_to_server_clock():
+    configs = []
+    BinanceAdapter(credentials(), ConnectionPolicy(), client_factory=lambda config: configs.append(config) or client())
+    assert configs[0]['options']['adjustForTimeDifference'] is True
+    assert configs[0]['options']['recvWindow'] == 10000
+
+
+@pytest.mark.parametrize('error, status, text', [
+    (ccxt.InvalidNonce('binance {"code":-1021}'), 503, 'clock'),
+    (ccxt.RequestTimeout('timed out'), 504, 'timed out'),
+    (ccxt.ExchangeNotAvailable('451 restricted location'), 503, 'unreachable from this network'),
+    (ccxt.DDoSProtection('418 banned'), 503, 'unreachable from this network'),
+    (ccxt.RateLimitExceeded('429'), 429, 'rate limit'),
+    (ccxt.NetworkError('reset'), 503, 'unavailable'),
+])
+def test_network_failures_are_specific(error, status, text):
+    c = client()
+    c.fetch_balance.side_effect = error
+    with pytest.raises(ExchangeFailure, match=text) as raised:
+        BinanceAdapter(credentials(), ConnectionPolicy(), client_factory=lambda config: c).connect()
+    assert raised.value.status_code == status

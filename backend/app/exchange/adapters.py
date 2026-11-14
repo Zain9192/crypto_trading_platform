@@ -2,12 +2,15 @@
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from functools import wraps
+import logging
 
 import ccxt
 from pydantic import ValidationError
 
 from app.exchange.contracts import Balance, ConnectionPolicy, ExchangeError, ExchangeName, Order, PriceQuote, Trade
 from app.portfolio.risk import PortfolioError
+
+logger = logging.getLogger(__name__)
 
 
 class ExchangeFailure(ExchangeError):
@@ -31,7 +34,20 @@ def safe_operation(method):
             raise ExchangeFailure('Exchange order not found', 404) from None
         except ccxt.RateLimitExceeded:
             raise ExchangeFailure('Exchange rate limit reached; retry later', 429) from None
-        except ccxt.NetworkError:
+        except ccxt.InvalidNonce:
+            # Signed request timestamp outside the exchange window (e.g. Binance -1021): local/Docker clock drift.
+            logger.warning('Exchange rejected request timestamp (clock out of sync)')
+            raise ExchangeFailure('Exchange rejected the request time; sync this computer clock '
+                                  '(and restart Docker Desktop), then retry', 503) from None
+        except ccxt.RequestTimeout:
+            logger.warning('Exchange request timed out')
+            raise ExchangeFailure('Exchange request timed out; check the internet connection, firewall or proxy', 504) from None
+        except (ccxt.ExchangeNotAvailable, ccxt.DDoSProtection) as exc:
+            logger.warning('Exchange unreachable or refused this network: %s', type(exc).__name__)
+            raise ExchangeFailure('Exchange is unreachable from this network (maintenance, regional or IP block, '
+                                  'or DNS/firewall issue)', 503) from None
+        except ccxt.NetworkError as exc:
+            logger.warning('Exchange network error: %s', type(exc).__name__)
             raise ExchangeFailure('Exchange unavailable or request timed out', 503) from None
         except (ccxt.BadSymbol, ccxt.InvalidOrder, ccxt.NotSupported):
             raise ExchangeFailure('Exchange does not support this symbol or operation', 422) from None
@@ -68,7 +84,9 @@ class CCXTSpotAdapter:
             raise ExchangeFailure('Live exchange mutations are disabled', 422)
         options = {'defaultType': 'spot'}
         if self.exchange == ExchangeName.BINANCE:
-            options.update({'fetchMarkets': {'types': ['spot']}, 'fetchCurrencies': False})
+            # Sync to the server clock on load_markets so laptop/Docker clock drift cannot break signed requests.
+            options.update({'fetchMarkets': {'types': ['spot']}, 'fetchCurrencies': False,
+                            'adjustForTimeDifference': True, 'recvWindow': 10000})
         config = {'apiKey': credentials.api_key.get_secret_value(), 'secret': credentials.api_secret.get_secret_value(),
                   'enableRateLimit': True, 'timeout': 15000, 'verbose': False, 'maxRetriesOnFailure': 0, 'options': options}
         if credentials.passphrase:
