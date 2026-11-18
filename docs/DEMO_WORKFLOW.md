@@ -7,7 +7,7 @@ Verified on 2026-11-14 (Windows 11, Docker Desktop, Compose v5): **57/57 end-to-
 | Part | What it covers | Time |
 | --- | --- | --- |
 | [A. Start the stack](#a-start-the-stack) | Docker services, migrations, market history | 5–15 min (first time) |
-| [B. Train AI models](#b-train-the-ai-models) | BTC and ETH forecasts for `1h`, `4h`, `1d`, `1w` | 1–3 min per model (~15–20 min all) |
+| [B. Train AI models](#b-train-the-ai-models) | 20 coins × `1h`, `4h`, `1d`, `1w` (80 models) in one loop | 15–40 min |
 | [C. Automated end-to-end test](#c-automated-end-to-end-test) | All 11 modules through the API | ~2 min |
 | [D. Unit test suites](#d-unit-test-suites) | Backend pytest, frontend Vitest | ~1 min |
 | [E. Live browser demo](#e-live-browser-demo-script) | Presenter script, module by module | 15–20 min |
@@ -55,12 +55,14 @@ Confirm all migrations ran (27 tables, incl. `admin_audit`, `verification_email_
 docker compose exec -T postgres psql -U crypto_user -d crypto_trading -c "\dt"
 ```
 
-Wait for market history (needed for AI + bots). Each coin needs ~500 `1d` candles:
+Wait for market history (needed for AI + bots). Each coin needs **300+** `1d` candles to train (a full backfill stores ~500):
 
 ```powershell
 docker compose logs -f market-ingestion          # look for "History cycle persisted N candle updates"
-docker compose exec -T mongodb mongosh crypto_market --quiet --eval "db.market_data.countDocuments({symbol:'BTC',interval:'1d'})"
+docker compose exec -T mongodb mongosh crypto_market --quiet --eval "const coins=['BTC','ETH','BNB','XRP','SOL','TRX','ZEC','DOGE','LINK','ADA','XLM','NEAR','BCH','LTC','AVAX','UNI','HBAR','AAVE','PAXG','USDC']; let ok=0; coins.forEach(s=>{ const n=db.market_data.countDocuments({symbol:s,interval:'1d'}); if(n>=300) ok++; print(s.padEnd(5), String(n).padStart(5), n>=300?'OK':'LOW'); }); print('1d history ready: '+ok+' / '+coins.length);"
 ```
+
+Expected — one line per coin, ending with `1d history ready: 20 / 20`. Any `LOW` means ingestion is still backfilling that coin; wait a few minutes and rerun. For all four intervals (`1h`, `4h`, `1d`, `1w`) use the check in [Part B → Step 1](#step-1--check-all-20-coins-are-ingested).
 
 > Fresh-volume note: SQL files in `database/postgres/` run automatically only on a **new** volume. For an old volume, apply missing migrations in order (see README), or reset with `docker compose down -v` (deletes local data).
 
@@ -68,89 +70,85 @@ docker compose exec -T mongodb mongosh crypto_market --quiet --eval "db.market_d
 
 ## B. Train the AI models
 
-Bots, forecasts and ranking need an **active** model for **each symbol and interval** separately. A `1d` model does not answer `1h` requests — train every interval you want to show in the **AI predictions** screen or use in a bot.
+Forecasts, the **AI predictions** screen, opportunity ranking and bots need an **active model for each coin and interval** — a `1d` model does not answer `1h` requests. This part trains **20 coins × 4 intervals = 80 models** with one loop.
 
-Each command takes about **1–3 minutes**. All 8 below take roughly **15–20 minutes**. Run them one by one, or skip intervals you do not need.
+**Coins:** `BTC ETH BNB XRP SOL TRX ZEC DOGE LINK ADA XLM NEAR BCH LTC AVAX UNI HBAR AAVE PAXG USDC`
+**Intervals:** `1h` (predicts the next hour), `4h` (next 4 hours), `1d` (next day), `1w` (next week)
 
-### 1 hour (`1h`) — predicts the next hour
+> - These are the top-50 coins with a Binance USDT pair and enough history on all four intervals.
+> - `USDC` is a stablecoin (≈ $1) and `PAXG` tracks gold, so their forecasts are of little trading use; remove them from `$coins` below if you only want volatile coins.
+> - **`USDC 1w` cannot be trained**: Binance has no USDC trading from Sept 2022 to March 2023, leaving too few continuous weekly candles. Expect **79 / 80** models.
+> - **`1M` (monthly) cannot be trained** for any coin: only ~112 monthly candles exist and training needs ~300. `1M` still works for charts in the **Market data** tab.
 
-```powershell
-docker compose --profile training run --rm prediction-trainer --symbol BTC --interval 1h --limit 1000 --lookback 20 --epochs 10 --trees 100 --activate
-docker compose --profile training run --rm prediction-trainer --symbol ETH --interval 1h --limit 1000 --lookback 20 --epochs 10 --trees 100 --activate
-```
+### Step 1 — Check all 20 coins are ingested
 
-### 4 hours (`4h`) — predicts the next 4 hours
-
-```powershell
-docker compose --profile training run --rm prediction-trainer --symbol BTC --interval 4h --limit 1000 --lookback 20 --epochs 10 --trees 100 --activate
-docker compose --profile training run --rm prediction-trainer --symbol ETH --interval 4h --limit 1000 --lookback 20 --epochs 10 --trees 100 --activate
-```
-
-### 1 day (`1d`) — predicts the next day
+Training reads the **latest 1000 candles** and needs **300+ continuous candles** (no gaps). This command checks exactly that for all 80 coin/interval pairs:
 
 ```powershell
-docker compose --profile training run --rm prediction-trainer --symbol BTC --interval 1d --limit 1000 --lookback 20 --epochs 10 --trees 100 --activate
-docker compose --profile training run --rm prediction-trainer --symbol ETH --interval 1d --limit 1000 --lookback 20 --epochs 10 --trees 100 --activate
+docker compose exec -T mongodb mongosh crypto_market --quiet --eval "const coins=['BTC','ETH','BNB','XRP','SOL','TRX','ZEC','DOGE','LINK','ADA','XLM','NEAR','BCH','LTC','AVAX','UNI','HBAR','AAVE','PAXG','USDC']; const ivs={'1h':36e5,'4h':144e5,'1d':864e5,'1w':6048e5}; let ok=0; coins.forEach(s=>{ print(s.padEnd(5), Object.keys(ivs).map(i=>{ const t=db.market_data.find({symbol:s,interval:i},{timestamp:1,_id:0}).sort({timestamp:-1}).limit(1000).toArray().map(x=>+x.timestamp); let g=0; for(let k=1;k<t.length;k++){ if(t[k-1]-t[k]!==ivs[i]) g++; } const st=t.length<300?'LOW ':(g?'GAPS':'OK  '); if(st==='OK  ') ok++; return (i+'='+t.length).padEnd(8)+' '+st; }).join('  ')); }); print('Ready to train: '+ok+' / 80   (OK = 300+ candles and no gaps in the latest 1000)');"
 ```
 
-### 1 week (`1w`) — predicts the next week
+Expected when ready:
 
-```powershell
-docker compose --profile training run --rm prediction-trainer --symbol BTC --interval 1w --limit 1000 --lookback 20 --epochs 10 --trees 100 --activate
-docker compose --profile training run --rm prediction-trainer --symbol ETH --interval 1w --limit 1000 --lookback 20 --epochs 10 --trees 100 --activate
+```text
+BTC   1h=1000  OK    4h=684   OK    1d=531   OK    1w=484   OK
+ETH   1h=1000  OK    4h=684   OK    1d=531   OK    1w=484   OK
+...
+USDC  1h=1000  OK    4h=684   OK    1d=531   OK    1w=393   GAPS
+Ready to train: 79 / 80   (OK = 300+ candles and no gaps in the latest 1000)
 ```
 
-### 1 month (`1M`) — not trainable
-
-Training needs roughly **300+ continuous candles** after indicator warm-up. Binance only has about **112 monthly** BTC/ETH candles, so `1M` training fails with *DataError: At least 200 supervised sequences are required; ingest at least 300 candles*. The `1M` interval still works for charts and indicators in the **Market data** tab; the AI predictions screen shows *no active model* for it.
-
-### Data needed per interval
-
-| Interval | Stored candles (BTC, approx.) | Trainable |
+| Status | Meaning | Fix |
 | --- | --- | --- |
-| `1h` | ~1000 | ✅ |
-| `4h` | ~660 | ✅ |
-| `1d` | ~527 | ✅ |
-| `1w` | ~483 | ✅ |
-| `1M` | ~112 | ❌ |
+| `OK` | 300+ continuous candles | Ready |
+| `LOW` | Ingestion is still backfilling (fresh setup: 10–20 min) | Wait for `History cycle persisted …` in `docker compose logs -f market-ingestion`, rerun the check |
+| `GAPS` on `1h` | The stack was off for more than ~3 weeks, and ingestion only re-fetches the latest `MARKET_HISTORY_CANDLE_LIMIT` (500) candles, so the hole is never refilled | Set `MARKET_HISTORY_CANDLE_LIMIT=1000` in `.env`, run `docker compose up -d market-ingestion`, wait for the next `History cycle persisted …` (~15–20 min), rerun the check |
+| `GAPS` on `USDC 1w` | Gap in Binance's own data | Cannot be fixed — that one model will fail |
 
-Check your own counts before training:
+### Step 2 — Train all 80 models
 
-```powershell
-docker compose exec -T mongodb mongosh crypto_market --quiet --eval "db.market_data.aggregate([{`$match:{symbol:{`$in:['BTC','ETH']}}},{`$group:{_id:{s:'`$symbol',i:'`$interval'},n:{`$sum:1}}},{`$sort:{'_id.s':1,'_id.i':1}}]).forEach(x=>print(x._id.s,x._id.i,x.n))"
-```
-
-(The backticks before `$` stop PowerShell from treating `$match`, `$sum` etc. as its own variables.)
-
-### Output and confirmation
-
-Each run prints JSON with the version UUID, validation/test metrics (MAE, RMSE, directional accuracy, F1), the persistence baseline and a held-out backtest. Confirm the active models:
+Paste the whole block into PowerShell from the project folder. It trains every coin on every interval, activates each model, saves each run's output to a log file and lists any failures at the end:
 
 ```powershell
-docker compose exec -T postgres psql -U crypto_user -d crypto_trading -c "select symbol, timeframe, model_id, is_active from ml_models where is_active order by symbol, timeframe"
+$coins = "BTC","ETH","BNB","XRP","SOL","TRX","ZEC","DOGE","LINK","ADA","XLM","NEAR","BCH","LTC","AVAX","UNI","HBAR","AAVE","PAXG","USDC"
+$intervals = "1h","4h","1d","1w"
+$logs = "$env:USERPROFILE\crypto-training-logs"; New-Item -ItemType Directory -Force $logs | Out-Null
+$failed = @()
+foreach ($s in $coins) { foreach ($i in $intervals) {
+  Write-Host "Training $s $i ..."
+  docker compose --profile training run --rm prediction-trainer --symbol $s --interval $i --limit 1000 --lookback 20 --epochs 10 --trees 100 --activate *> "$logs\$s-$i.log"
+  if ($LASTEXITCODE -ne 0) { $failed += "$s $i"; Write-Host "  FAILED - see $logs\$s-$i.log" } else { Write-Host "  done" }
+} }
+if ($failed) { "Failed: $($failed -join ', ')" } else { "All models trained and activated." }
 ```
 
-Expected — exactly **one active row per symbol/interval** (8 rows; your `model_id` values will differ):
+- **Time:** about **8 seconds to 1 minute per model** → roughly **15–40 minutes** for all 80. Keep the laptop awake.
+- **Expected result:** `Failed: USDC 1w` (see above). Anything else in the failed list → open its log.
+- **Logs:** `C:\Users\<you>\crypto-training-logs\<COIN>-<interval>.log` — metrics and backtest on success, the error on failure. The most common error, `Stored candles contain duplicates or gaps`, means Step 1 showed `GAPS`.
+- **Retry only failures:** set `$coins` and `$intervals` to the failed ones and paste the block again. Retraining is safe — each successful run activates a new version and keeps the old one for rollback.
 
-| symbol | timeframe | is_active |
-| --- | --- | --- |
-| BTC | 1d | t |
-| BTC | 1h | t |
-| BTC | 1w | t |
-| BTC | 4h | t |
-| ETH | 1d | t |
-| ETH | 1h | t |
-| ETH | 1w | t |
-| ETH | 4h | t |
+### Step 3 — Check all 80 models are trained
 
-Every retrain with `--activate` adds a new row and switches the previous version for that symbol/interval to `f` (kept for rollback). To see all versions, drop `where is_active` from the query.
+```powershell
+docker compose exec -T postgres psql -U crypto_user -d crypto_trading -c "with c(symbol) as (values ('BTC'),('ETH'),('BNB'),('XRP'),('SOL'),('TRX'),('ZEC'),('DOGE'),('LINK'),('ADA'),('XLM'),('NEAR'),('BCH'),('LTC'),('AVAX'),('UNI'),('HBAR'),('AAVE'),('PAXG'),('USDC')), i(tf) as (values ('1h'),('4h'),('1d'),('1w')), want as (select symbol, tf from c cross join i) select count(*) filter (where m.symbol is not null) as trained, count(*) as expected, coalesce(string_agg(w.symbol || ' ' || w.tf, ', ' order by w.symbol, w.tf) filter (where m.symbol is null), 'none') as missing from want w left join ml_models m on m.is_active and m.symbol = w.symbol and m.timeframe = w.tf"
+```
+
+Expected:
+
+```text
+ trained | expected | missing
+---------+----------+---------
+      79 |       80 | USDC 1w
+```
+
+`missing` lists every coin/interval without an active model — retrain just those with the Step 2 loop. Then open **AI predictions** in the app, pick a coin and interval, and use **Opportunity ranking** (up to 20 coins at a time).
 
 ### Notes
 
-- **Retrain short intervals more often.** `1h` and `4h` models go stale quickly — retrain them daily or weekly; `1d` / `1w` less often. The *Feature drift* badge on the AI predictions screen shows `review` when a model needs attention.
-- **`At least 200 supervised sequences are required`:** ingestion has not finished for that interval — wait for `History cycle persisted …` in `docker compose logs -f market-ingestion` and retry. For more `4h` / `1d` history set `MARKET_HISTORY_CANDLE_LIMIT=1000` in `.env` and run `docker compose up -d market-ingestion`.
-- **Other coins:** replace `BTC` / `ETH` with any top-50 symbol that has a Binance USDT pair (e.g. `SOL`, `BNB`, `XRP`).
-- Omit `--activate` to create an inactive candidate and activate later with `--activate-version <UUID>`.
+- **Retrain short intervals more often.** `1h` / `4h` models go stale quickly — retrain them daily or weekly; `1d` / `1w` less often. The *Feature drift* badge on the AI predictions screen shows `review` when a model needs attention.
+- **Other coins:** any top-50 coin with a Binance USDT pair and a clean Step 1 check can be added to `$coins` (e.g. `SUI`, `TAO`, `SHIB` on `1h`/`4h`/`1d`).
+- **All versions:** `docker compose exec -T postgres psql -U crypto_user -d crypto_trading -c "select symbol, timeframe, model_id, is_active, trained_at from ml_models order by symbol, timeframe, trained_at"`.
+- **Inactive candidates:** remove `--activate` to train without switching the live model, then activate later with `docker compose --profile training run --rm prediction-trainer --activate-version <UUID>`.
 
 ---
 
@@ -292,7 +290,8 @@ To make your own account admin instead: from the admin workspace set its role to
 | `/market/assets` occasionally 502; logs show CoinGecko `429 Too Many Requests` | CoinGecko free-tier rate limit (shared by backend, ingestion and worker) | Transient — next 30 s cycle recovers. Close extra browser tabs; raise `MARKET_REFRESH_SECONDS` if frequent. |
 | Inbox shows a `bot-failure` notification; worker log `Bot tick failed` | Same CoinGecko 429 during a bot tick | Next tick retries automatically. |
 | Ingestion log `Binance OHLCV request failed for BUIDL` (or other tokens) | Asset has no Binance USDT pair | Harmless; skipped. |
-| Training: not enough samples | History still backfilling | Wait for `History cycle persisted …`, retry. |
+| Training: *At least 200 supervised sequences are required* | History still backfilling (`LOW` in Part B Step 1) | Wait for `History cycle persisted …`, retry. |
+| Training: *Stored candles contain duplicates or gaps* (usually all `1h`) | Stack was off for weeks; ingestion only re-fetches the latest 500 candles (`GAPS` in Part B Step 1) | Set `MARKET_HISTORY_CANDLE_LIMIT=1000` in `.env`, `docker compose up -d market-ingestion`, wait one history cycle, retrain `1h`. |
 | Forecast / bot: *Prediction unavailable* | No active model for that symbol/interval | Train with `--activate` (Part B). |
 | Bootstrap: *An active administrator already exists* | Bootstrap only creates the first admin | Use the admin workspace to promote users. |
 | Backend pytest auth tests fail with 429 | Run with container's `development` env | Add `-e APP_ENV=test -e RATE_LIMIT_ENABLED=false` (Part D). |
