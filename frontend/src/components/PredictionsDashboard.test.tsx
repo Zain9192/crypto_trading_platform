@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import PredictionsDashboard from './PredictionsDashboard'
+import PredictionsDashboard, { COINS } from './PredictionsDashboard'
 import type { Forecast } from './PredictionsDashboard'
 
 const forecast = (symbol: string, direction: Forecast['direction'], expected_return: number): Forecast => ({
@@ -33,6 +33,11 @@ it('shows the forecast card, model versions and ranking', async () => {
   expect(screen.getByText('71.0%')).toBeInTheDocument()
   expect(screen.getByText('review')).toBeInTheDocument()
   expect(await screen.findByText('Active')).toBeInTheDocument()
+  expect(within(screen.getByLabelText('Interval')).getAllByRole('option').map(o => o.textContent)).toEqual(['1h', '4h', '1d', '1w'])
+  const coins = within(screen.getByLabelText('Symbol')).getAllByRole('option').map(o => o.textContent)
+  expect(coins).toEqual(COINS)
+  expect(coins).toHaveLength(20)
+  expect(screen.getByLabelText('Symbol')).toHaveValue('BTC')
 
   fireEvent.click(screen.getByRole('button', { name: 'Rank on 1d' }))
   expect(await screen.findByText('No active model: SOL, BNB, XRP')).toBeInTheDocument()
@@ -48,8 +53,8 @@ it('explains when no active model exists', async () => {
   })
   mount(request)
   await screen.findByText(/Train and activate a model for BTC 1d/)
-  fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: 'doge' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Get forecast' }))
+  fireEvent.change(screen.getByLabelText('Symbol'), { target: { value: 'DOGE' } })
   expect(await screen.findByText(/Train and activate a model for DOGE 1d/)).toBeInTheDocument()
+  expect(request).toHaveBeenCalledWith('/predictions/DOGE?interval=1d')
   expect(await screen.findByText('No trained versions yet.')).toBeInTheDocument()
 })
