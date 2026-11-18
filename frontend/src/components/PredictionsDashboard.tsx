@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import SymbolPicker from './SymbolPicker'
 
 type Request = <T>(path: string, method?: string, body?: unknown) => Promise<T>
 export interface Forecast {
@@ -53,7 +54,7 @@ export default function PredictionsDashboard({ request }: { request: Request }) 
     <div className="portfolio-columns">
       <section className="market-panel portfolio-card"><h3>Forecast</h3>
         <form className="portfolio-form" onSubmit={choose}>
-          <label>Symbol<select value={symbol} onChange={e => setSymbol(e.target.value)}>{COINS.map(c => <option key={c}>{c}</option>)}</select></label>
+          <SymbolPicker label="Symbol" options={COINS} value={symbol} onChange={setSymbol} />
           <label>Interval<select value={interval} onChange={e => setTimeframe(e.target.value)}>{INTERVALS.map(v => <option key={v}>{v}</option>)}</select></label>
           <button className="primary-button" disabled={forecast.isFetching}>{forecast.isFetching ? 'Forecasting…' : 'Get forecast'}</button>
         </form>

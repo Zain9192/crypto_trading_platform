@@ -176,5 +176,16 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 
 .portfolio-form textarea, .portfolio-shell select { width: 100%; min-width: 0; color: #e7edf7; border: 1px solid #365575; border-radius: 7px; padding: 10px; background: #08182c; font: inherit; }
 .portfolio-form textarea { resize: vertical; }
+
+/* AI predictions symbol picker: dropdown whose open list shows 3 options and scrolls */
+.symbol-picker { position: relative; display: grid; gap: 7px; min-width: 0; color: #c2d1e2; font-size: .9rem; }
+.symbol-picker-button { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-width: 0; box-sizing: border-box; color: #e7edf7; border: 1px solid #365575; border-radius: 7px; padding: 10px; background: #08182c; cursor: pointer; user-select: none; }
+.symbol-picker-button:focus-visible { outline: 2px solid #3abbfd; outline-offset: 1px; }
+.symbol-picker-button[aria-expanded="true"] { border-color: #3abbfd; }
+.symbol-picker-caret { color: #8ea0b7; }
+.symbol-picker-list { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; margin: 4px 0 0; padding: 0; list-style: none; max-height: calc(3 * 2.5rem); overflow-y: auto; overscroll-behavior: contain; background: #08182c; border: 1px solid #3abbfd; border-radius: 7px; box-shadow: 0 10px 24px rgba(0, 0, 0, .45); }
+.symbol-picker-list li { display: flex; align-items: center; justify-content: space-between; height: 2.5rem; box-sizing: border-box; padding: 0 12px; color: #dceafa; cursor: pointer; }
+.symbol-picker-list li.active { background: #133a5c; }
+.symbol-picker-list li[aria-selected="true"] { color: #3abbfd; font-weight: 650; }
 .portfolio-shell dd { margin: 4px 0 12px; overflow-wrap: anywhere; }
 .portfolio-shell dt { color: #a8bad0; }
