@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import SymbolPicker from './SymbolPicker'
 
 type Request = <T>(path: string, method?: string, body?: unknown) => Promise<T>
 export interface Forecast {
@@ -14,7 +15,10 @@ export interface Forecast {
 interface Ranking { items: { forecast: Forecast; score: number }[]; unavailable: Record<string, string> }
 interface ModelVersion { version: string; algorithm: string; trained_at: string; is_active: boolean }
 
-const INTERVALS = ['1h', '4h', '1d', '1w', '1M']
+// 1M is excluded: too few monthly candles exist to train a model (see docs/DEMO_WORKFLOW.md, Part B).
+const INTERVALS = ['1h', '4h', '1d', '1w']
+// Top-50 coins with a Binance USDT pair and enough history to train on all four intervals (docs/DEMO_WORKFLOW.md, Part B).
+export const COINS = ['BTC', 'ETH', 'BNB', 'XRP', 'SOL', 'TRX', 'ZEC', 'DOGE', 'LINK', 'ADA', 'XLM', 'NEAR', 'BCH', 'LTC', 'AVAX', 'UNI', 'HBAR', 'AAVE', 'PAXG', 'USDC']
 const ARROW = { up: '▲', down: '▼', neutral: '◆' }
 const price = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: value < 1 ? 6 : 2 })
 const pct = (value: number) => `${value >= 0 ? '+' : ''}${(value * 100).toFixed(2)}%`
@@ -34,8 +38,7 @@ export default function PredictionsDashboard({ request }: { request: Request }) 
 
   function choose(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const value = String(new FormData(event.currentTarget).get('symbol') ?? '').trim().toUpperCase()
-    if (value) setSymbol(value)
+    void forecast.refetch(); void models.refetch()
   }
   function rank(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -51,7 +54,7 @@ export default function PredictionsDashboard({ request }: { request: Request }) 
     <div className="portfolio-columns">
       <section className="market-panel portfolio-card"><h3>Forecast</h3>
         <form className="portfolio-form" onSubmit={choose}>
-          <label>Symbol<input name="symbol" defaultValue={symbol} required maxLength={20} pattern="[A-Za-z0-9]+" placeholder="BTC" /></label>
+          <SymbolPicker label="Symbol" options={COINS} value={symbol} onChange={setSymbol} />
           <label>Interval<select value={interval} onChange={e => setTimeframe(e.target.value)}>{INTERVALS.map(v => <option key={v}>{v}</option>)}</select></label>
           <button className="primary-button" disabled={forecast.isFetching}>{forecast.isFetching ? 'Forecasting…' : 'Get forecast'}</button>
         </form>
